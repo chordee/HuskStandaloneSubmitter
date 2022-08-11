@@ -16,11 +16,32 @@ Index=0
 Default=True
 Description=Not configurable
 
-[USD_RenderExecutable]
+[USD_RenderExecutable_18_5]
+Label=Houdini 18.5 Husk Executable
 Type=multilinemultifilename
 Category=Render Executables
 CategoryOrder=0
 Index=0
 Label=HUSK Executable
 Description=The path to the husk executable file used for rendering. Enter alternative paths on separate lines.
-Default=C:\Program Files\Side Effects Software\Houdini 18.5.596\bin\husk.exe
+Default=C:\Program Files\Side Effects Software\Houdini 18.5.672\bin\husk.exe
+
+[USD_RenderExecutable_19_0]
+Label=Houdini 19.0 Husk Executable
+Type=multilinemultifilename
+Category=Render Executables
+CategoryOrder=0
+Index=1
+Label=HUSK Executable
+Description=The path to the husk executable file used for rendering. Enter alternative paths on separate lines.
+Default=C:\Program Files\Side Effects Software\Houdini 19.0.657\bin\husk.exe
+
+[USD_RenderExecutable_19_5]
+Label=Houdini 19.5 Husk Executable
+Type=multilinemultifilename
+Category=Render Executables
+CategoryOrder=0
+Index=2
+Label=HUSK Executable
+Description=The path to the husk executable file used for rendering. Enter alternative paths on separate lines.
+Default=C:\Program Files\Side Effects Software\Houdini 19.5.303\bin\husk.exe

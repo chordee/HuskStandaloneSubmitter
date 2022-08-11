@@ -71,10 +71,26 @@ def SubmissionDialog():
     scriptDialog.AddControlToGrid( "NameBox", "TextControl", "Untitled", 1, 1, colSpan=5 )
     # COMMENT Label
     scriptDialog.AddControlToGrid( "CommentLabel", "LabelControl", "Comment", 2, 0, "A simple description of your job. This is optional and can be left blank.", False )
-    scriptDialog.AddControlToGrid( "CommentBox", "MultiLineTextControl", "", 2, 1, colSpan=5 )
+    scriptDialog.AddControlToGrid( "CommentBox", "TextControl", "", 2, 1, colSpan=5 )
+    scriptDialog.EndGrid()
+
+    scriptDialog.AddGrid()
+    scriptDialog.AddControlToGrid( "PoolLabel", "LabelControl", "Pool", 0, 0, "The pool that your job will be submitted to.", False )
+    scriptDialog.AddControlToGrid( "PoolBox", "PoolComboControl", "none", 0, 1 )
+    scriptDialog.AddControlToGrid( "GroupLabel", "LabelControl", "Group", 1, 0, "The group that your job will be submitted to.", False )
+    scriptDialog.AddControlToGrid( "GroupBox", "GroupComboControl", "none", 1, 1 )
+    scriptDialog.EndGrid()
+
+
+    scriptDialog.AddGrid()
     #file dialog
-    scriptDialog.AddControlToGrid( "InputLabel", "LabelControl", "USD File", 4, 0, "The USD file you wish to render.", False )
-    filesToProcess = scriptDialog.AddSelectionControlToGrid( "USDFilePath", "MultiFileBrowserControl", "", "USD Files (*.usd);;USDA Files (*.usda);;USDC Files(*.usdc);;USDZ Files(*.usdz)", 4, 1, colSpan=5 )
+    scriptDialog.AddControlToGrid( "InputLabel", "LabelControl", "USD File", 0, 0, "The USD file you wish to render.", False )
+    filesToProcess = scriptDialog.AddSelectionControlToGrid( "USDFilePath", "MultiFileBrowserControl", "", "USD Files (*.usd);;USDA Files (*.usda);;USDC Files(*.usdc);;USDZ Files(*.usdz)", 0, 1, colSpan=5 )
+    
+    
+
+
+
     #Frame Boxes
     scriptDialog.AddControlToGrid( "StartFrameLabel", "LabelControl", "Start", 5, 0, "Start Frame", False )
     scriptDialog.AddRangeControlToGrid( "StartFrame", "RangeControl", 1,-65535,65535,0,1, 5,1 )
@@ -84,14 +100,44 @@ def SubmissionDialog():
     scriptDialog.AddRangeControlToGrid( "IncFrame", "RangeControl", 1,1,100,0,1, 5, 5 )
     scriptDialog.EndGrid()
 
+    scriptDialog.AddGroupBox("OverideGroup","Overide Setting",False)
+    scriptDialog.AddGrid()
+    scriptDialog.AddSelectionControlToGrid( "RenderSettingCheckbox", "CheckBoxControl", False, "Render Setting" ,6,0, "")
+    scriptDialog.AddControlToGrid( "RenderSettingBox", "TextControl", "", 6, 1, colSpan=5)
+
+    scriptDialog.AddSelectionControlToGrid( "CameraCheckbox", "CheckBoxControl", False, "Camera" ,7,0, "")
+    scriptDialog.AddControlToGrid( "CameraBox", "TextControl", "", 7, 1, colSpan=5)
+
+    scriptDialog.AddSelectionControlToGrid( "DisableMotionBlurCheckBox", "CheckBoxControl", False, "Disable Motion Blur" ,8,0, "")
+
+    scriptDialog.EndGrid()
+    scriptDialog.EndGroupBox(False)
+
+    scriptDialog.AddGroupBox("ScriptsGroup","Scripts Files",False)
+    scriptDialog.AddGrid()
+
+    scriptDialog.AddControlToGrid( "PreRenderScriptLabel", "LabelControl", "Pre Render Script", 1, 0, "", False )
+    scriptDialog.AddSelectionControlToGrid( "PreRenderScriptBox", "FileBrowserControl", "", "Python Files (*.py)", 1, 1, colSpan=6 )
+    scriptDialog.AddControlToGrid( "PreFrameScriptLabel", "LabelControl", "Pre Frame Script", 2, 0, "", False )
+    scriptDialog.AddSelectionControlToGrid( "PreFrameScriptBox", "FileBrowserControl", "", "Python Files (*.py)", 2, 1, colSpan=6 )
+    scriptDialog.AddControlToGrid( "PostFrameScriptLabel", "LabelControl", "Post Frame Script", 3, 0, "", False )
+    scriptDialog.AddSelectionControlToGrid( "PostFrameScriptBox", "FileBrowserControl", "", "Python Files (*.py)", 3, 1, colSpan=6 )
+    scriptDialog.AddControlToGrid( "PostRenderScriptLabel", "LabelControl", "Post Render Script", 4, 0, "", False )
+    scriptDialog.AddSelectionControlToGrid( "PostRenderScriptBox", "FileBrowserControl", "", "Python Files (*.py)", 4, 1, colSpan=6 )
+
+    scriptDialog.EndGrid()
+    scriptDialog.EndGroupBox(False)
+
+    
+
     #collapsed settings
-    scriptDialog.AddGroupBox("AdvancedGroup","Advanced Settings",True)
+    scriptDialog.AddGroupBox("AdvancedGroup","Advanced Settings",False)
     scriptDialog.AddGrid()
     #Logging level
     scriptDialog.AddControlToGrid( "LogLevelLabel", "LabelControl", "Log Level", 0, 0)
     scriptDialog.AddComboControlToGrid("LogLevelCombo","ComboControl","None",["None","Basic","Enhanced","Godlike","David"],0,1)
     scriptDialog.EndGrid()
-    scriptDialog.EndGroupBox(True)
+    scriptDialog.EndGroupBox(False)
 
     #SubmitButton
     scriptDialog.AddGrid()
@@ -147,6 +193,13 @@ def SubmitButtonPressed():
     writer = StreamWriter( pluginInfoFilename, False, Encoding.Unicode )
     writer.WriteLine("SceneFile={}".format(scriptDialog.GetValue("USDFilePath")))
     writer.WriteLine("LogLevel={}".format(LoggingMap[scriptDialog.GetValue("LogLevelCombo")]))
+
+    if scriptDialog.GetValue("RenderSettingCheckbox"):
+        writer.WriteLine("RenderSetting={}".format(scriptDialog.GetValue("RenderSettingBox")))
+    if scriptDialog.GetValue("CameraCheckbox"):
+        writer.WriteLine("Camera={}".format(scriptDialog.GetValue("CameraBox")))
+    if scriptDialog.GetValue("DisableMotionBlurCheckBox"):
+        writer.WriteLine("DisableMotionBlur={}".format(scriptDialog.GetValue("DisableMotionBlurCheckBox")))
 
     writer.Close()
 
