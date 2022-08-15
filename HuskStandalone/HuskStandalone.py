@@ -74,6 +74,7 @@ class HuskStandalone(DeadlinePlugin):
         
         output_base_name = self.GetPluginInfoEntry("OutputBaseName").replace("\\", "/")
         output_ext_name = self.GetPluginInfoEntry("OutputExtendName")
+        padding_frame = self.GetIntegerPluginInfoEntry("PaddingFrame")
 
         argument = ""
         argument += usdFile + " "
@@ -114,7 +115,7 @@ class HuskStandalone(DeadlinePlugin):
         # renderer handled in job file.
         # [:-4] We are now going to site the composite USD in the project root.
 
-        paddedFrameNumber = StringUtils.ToZeroPaddedString(frameNumber, 4)
+        paddedFrameNumber = StringUtils.ToZeroPaddedString(frameNumber, padding_frame)
         argument += "-o {0}/{1}.{2}.{3} ".format(output_folder, output_base_name, paddedFrameNumber, output_ext_name)
         argument += " --make-output-path" + " "
 
