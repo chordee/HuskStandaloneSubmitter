@@ -85,6 +85,11 @@ class HuskStandalone(DeadlinePlugin):
 
         argument += "--renderer {} ".format(renderer)
 
+        if self.GetBooleanPluginInfoEntry("DisableLighting"):
+            argument += "--disable-lighting "
+        if self.GetBooleanPluginInfoEntry("DisableMotionBlur"):
+            argument += "--disable-motionblur "
+
         if purpose:
             argument += "--purpose {} ".format(purpose)
         if complexity:
