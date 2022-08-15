@@ -72,10 +72,10 @@ def SubmissionDialog():
     scriptDialog.AddGrid()
     #	(	 	self, 	name, 	control, 	value, 	row, 	column, 	tooltip = "", 	expand = True, 	rowSpan = -1, 	colSpan = -1 )
 
-    scriptDialog.AddControlToGrid("JobOptionsSeparator", "SeparatorControl", "Job Description", 0, 0, colSpan=6)
+    scriptDialog.AddControlToGrid("JobDescriptionSeparator", "SeparatorControl", "Job Description", 0, 0, colSpan=6)
     # JOB NAME
     scriptDialog.AddControlToGrid("NameLabel", "LabelControl", "Job Name", 1, 0,
-                                  "The name of your job. This is optional, and if left blank, it will default to 'Untitled'.")
+                                  "The name of your job. This is optional, and if left blank, it will default to 'Untitled'.", False)
     scriptDialog.AddControlToGrid("NameBox", "TextControl", "Untitled", 1, 1, colSpan=5)
     # COMMENT Label
     scriptDialog.AddControlToGrid("CommentLabel", "LabelControl", "Comment", 2, 0,
@@ -84,46 +84,52 @@ def SubmissionDialog():
     scriptDialog.EndGrid()
 
     scriptDialog.AddGrid()
-    scriptDialog.AddControlToGrid("PoolLabel", "LabelControl", "Pool", 0, 0,
+    scriptDialog.AddControlToGrid("JobOptionsSeparator", "SeparatorControl", "Job Options", 0, 0, colSpan=3)
+    scriptDialog.AddControlToGrid("PoolLabel", "LabelControl", "Pool", 1, 0,
                                   "The pool that your job will be submitted to.", False)
-    scriptDialog.AddControlToGrid("PoolBox", "PoolComboControl", "none", 0, 1)
-    scriptDialog.AddControlToGrid("GroupLabel", "LabelControl", "Group", 1, 0,
+    scriptDialog.AddControlToGrid("PoolBox", "PoolComboControl", "none", 1, 1)
+    scriptDialog.AddControlToGrid("GroupLabel", "LabelControl", "Group", 2, 0,
                                   "The group that your job will be submitted to.", False)
-    scriptDialog.AddControlToGrid("GroupBox", "GroupComboControl", "none", 1, 1)
-    scriptDialog.AddControlToGrid("PriorityLabel", "LabelControl", "Priority", 2, 0, "", False)
-    scriptDialog.AddRangeControlToGrid("Priority", "RangeControl", 50, 0, 100, 0, 1, 2, 1)
+    scriptDialog.AddControlToGrid("GroupBox", "GroupComboControl", "none", 2, 1)
+    scriptDialog.AddControlToGrid("PriorityLabel", "LabelControl", "Priority", 3, 0, "", False)
+    scriptDialog.AddRangeControlToGrid("Priority", "RangeControl", 50, 0, 100, 0, 1, 3, 1)
     scriptDialog.EndGrid()
 
     scriptDialog.AddGrid()
     # file dialog
-    scriptDialog.AddControlToGrid("InputLabel", "LabelControl", "USD File", 0,
+    scriptDialog.AddControlToGrid("InputOutputSeparator", "SeparatorControl", "Input Output", 0, 0, colSpan=8)
+    scriptDialog.AddControlToGrid("InputLabel", "LabelControl", "USD File", 1,
                                   0, "The USD file you wish to render.", False)
     filesToProcess = scriptDialog.AddSelectionControlToGrid(
-        "USDFilePath", "MultiFileBrowserControl", "", "USD Files (*.usd);;USDA Files (*.usda);;USDC Files(*.usdc);;USDZ Files(*.usdz)", 0, 1, colSpan=5)
-    scriptDialog.AddControlToGrid("VersionLabel", "LabelControl", "Version", 1, 0, "", False)
-    scriptDialog.AddComboControlToGrid("VersionCombo", "ComboControl", "19.5", houdini_versions, 1, 1)
-    scriptDialog.AddControlToGrid("RendererLabel", "LabelControl", "Renderer", 1, 2, "", False)
-    scriptDialog.AddComboControlToGrid("RendererCombo", "ComboControl", "Karma", houdini_renderers, 1, 3)
+        "USDFilePath", "MultiFileBrowserControl", "", "USD Files (*.usd);;USDA Files (*.usda);;USDC Files(*.usdc);;USDZ Files(*.usdz)", 1, 1, colSpan=7)
 
     scriptDialog.AddControlToGrid("OutputFolderLabel", "LabelControl", "Output Folder", 5, 0, "", False)
-    scriptDialog.AddSelectionControlToGrid("OutputFolder", "FolderBrowserControl", "", "", 5, 1, colSpan=5)
+    scriptDialog.AddSelectionControlToGrid("OutputFolder", "FolderBrowserControl", "", "", 5, 1, colSpan=7)
     scriptDialog.AddControlToGrid("OutputBaseNameLabel", "LabelControl", "BaseName", 6, 0, "", False)
-    scriptDialog.AddControlToGrid("OutputBaseNameBox", "TextControl", "", 6, 1)
-    scriptDialog.AddControlToGrid("OutputExtendNameLabel", "LabelControl", "Ext", 6, 2, "", False)
-    scriptDialog.AddComboControlToGrid("OutputExtendNameCombo", "ComboControl", "exr", ["exr", "png", "tif"], 6, 3)
+    scriptDialog.AddControlToGrid("OutputBaseNameBox", "TextControl", "", 6, 1, colSpan=5)
+    scriptDialog.AddControlToGrid("OutputExtendNameLabel", "LabelControl", "Ext", 6, 6, "", False)
+    scriptDialog.AddComboControlToGrid("OutputExtendNameCombo", "ComboControl",
+                                       "exr", ["exr", "png", "tif"], 6, 7, "", False)
 
     # Frame Boxes
     scriptDialog.AddControlToGrid("StartFrameLabel", "LabelControl", "Start Frame", 8, 0, "Start Frame", False)
-    scriptDialog.AddRangeControlToGrid("StartFrame", "RangeControl", 1, -65535, 65535, 0, 1, 8, 1)
+    scriptDialog.AddRangeControlToGrid("StartFrame", "RangeControl", 1, -65535, 65535, 0, 1, 8, 1, "", False)
     scriptDialog.AddControlToGrid("EndFrameLabel", "LabelControl", "End Frame", 8, 2, "End Frame", False)
-    scriptDialog.AddRangeControlToGrid("EndFrame", "RangeControl", 2, -65535, 65535, 0, 1, 8, 3)
+    scriptDialog.AddRangeControlToGrid("EndFrame", "RangeControl", 2, -65535, 65535, 0, 1, 8, 3, "", False)
     scriptDialog.AddControlToGrid("IncFrameLabel", "LabelControl", "inc", 8, 4, "Render every X frame", False)
-    scriptDialog.AddRangeControlToGrid("IncFrame", "RangeControl", 1, 1, 100, 0, 1, 8, 5)
+    scriptDialog.AddRangeControlToGrid("IncFrame", "RangeControl", 1, 1, 100, 0, 1, 8, 5, "", False)
+    scriptDialog.AddControlToGrid("PaddingFrameLabel", "LabelControl", "Padding", 8, 6, "", False)
+    scriptDialog.AddRangeControlToGrid("PaddingFrame", "RangeControl", 1, 1, 10, 0, 1, 8, 7, "", False)
     scriptDialog.EndGrid()
     scriptDialog.AddGrid()
+    scriptDialog.AddControlToGrid("HuskSettingSeparator", "SeparatorControl", "Husk Setting", 0, 0, colSpan=4)
+    scriptDialog.AddControlToGrid("VersionLabel", "LabelControl", "Version", 2, 0, "", False)
+    scriptDialog.AddComboControlToGrid("VersionCombo", "ComboControl", "19.5", houdini_versions, 2, 1, "", False)
+    scriptDialog.AddControlToGrid("RendererLabel", "LabelControl", "Renderer", 2, 2, "", False)
+    scriptDialog.AddComboControlToGrid("RendererCombo", "ComboControl", "Karma", houdini_renderers, 2, 3, "", False)
     scriptDialog.AddSelectionControlToGrid("HoudiniPackageDirCheckBox",
                                            "CheckBoxControl", False, "Houdini Package Dir", 9, 0, "", False)
-    scriptDialog.AddSelectionControlToGrid("HoudiniPackageDirFolder", "FolderBrowserControl", "", "", 9, 1, colSpan=5)
+    scriptDialog.AddSelectionControlToGrid("HoudiniPackageDirFolder", "FolderBrowserControl", "", "", 9, 1, colSpan=3)
 
     scriptDialog.EndGrid()
 
