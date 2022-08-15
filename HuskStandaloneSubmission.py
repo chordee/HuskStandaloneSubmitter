@@ -220,6 +220,10 @@ def SubmitButtonPressed():
     writer.WriteLine("Plugin=HuskStandalone")
     writer.WriteLine("Name={}".format(scriptDialog.GetValue("NameBox")))
     writer.WriteLine("Comment={}".format(scriptDialog.GetValue("CommentBox")))
+    writer.WriteLine("Priority={}".format(scriptDialog.GetValue("Priority")))
+    writer.WriteLine("Pool={}".format(scriptDialog.GetValue("PoolBox")))
+    writer.WriteLine("Group={}".format(scriptDialog.GetValue("GroupBox")))
+    
 
     # if a framerange overide is not specified then just grab the nsi file range from the files
     if scriptDialog.GetValue("IncFrame") == 1:
@@ -249,9 +253,7 @@ def SubmitButtonPressed():
     writer.WriteLine("OutputFolder={}".format(scriptDialog.GetValue("OutputFolder")))
     writer.WriteLine("OutputBaseName={}".format(scriptDialog.GetValue("OutputBaseNameBox")))
     writer.WriteLine("OutputExtendName={}".format(scriptDialog.GetValue("OutputExtendNameCombo")))
-    writer.WriteLine("Priority={}".format(scriptDialog.GetValue("Priority")))
-    writer.WriteLine("Pool={}".format(scriptDialog.GetValue("PoolBox")))
-    writer.WriteLine("Group={}".format(scriptDialog.GetValue("GroupBox")))
+    
 
     if scriptDialog.GetValue("RenderSettingCheckBox"):
         writer.WriteLine("RenderSetting={}".format(scriptDialog.GetValue("RenderSettingBox")))
@@ -268,6 +270,7 @@ def SubmitButtonPressed():
     if scriptDialog.GetValue("HoudiniPackageDirCheckBox"):
         writer.WriteLine("HoudiniPackageDir={}".format(scriptDialog.GetValue("HoudiniPackageDirFolder")))
 
+    
     writer.Close()
 
     # Setup the command line arguments.
