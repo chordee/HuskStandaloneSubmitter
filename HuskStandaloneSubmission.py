@@ -109,27 +109,28 @@ def SubmissionDialog():
     scriptDialog.AddControlToGrid("OutputBaseNameBox", "TextControl", "", 6, 1, colSpan=5)
     scriptDialog.AddControlToGrid("OutputExtendNameLabel", "LabelControl", "Ext", 6, 6, "", False)
     scriptDialog.AddComboControlToGrid("OutputExtendNameCombo", "ComboControl",
-                                       "exr", ["exr", "png", "tif"], 6, 7, "", False)
+                                       "exr", ["exr", "png", "tif"], 6, 7, "", True)
 
     # Frame Boxes
     scriptDialog.AddControlToGrid("StartFrameLabel", "LabelControl", "Start Frame", 8, 0, "Start Frame", False)
-    scriptDialog.AddRangeControlToGrid("StartFrame", "RangeControl", 1, -65535, 65535, 0, 1, 8, 1, "", False)
+    scriptDialog.AddRangeControlToGrid("StartFrame", "RangeControl", 1, -65535, 65535, 0, 1, 8, 1, "", True)
     scriptDialog.AddControlToGrid("EndFrameLabel", "LabelControl", "End Frame", 8, 2, "End Frame", False)
-    scriptDialog.AddRangeControlToGrid("EndFrame", "RangeControl", 2, -65535, 65535, 0, 1, 8, 3, "", False)
+    scriptDialog.AddRangeControlToGrid("EndFrame", "RangeControl", 2, -65535, 65535, 0, 1, 8, 3, "", True)
     scriptDialog.AddControlToGrid("IncFrameLabel", "LabelControl", "inc", 8, 4, "Render every X frame", False)
-    scriptDialog.AddRangeControlToGrid("IncFrame", "RangeControl", 1, 1, 100, 0, 1, 8, 5, "", False)
+    scriptDialog.AddRangeControlToGrid("IncFrame", "RangeControl", 1, 1, 100, 0, 1, 8, 5, "", True)
     scriptDialog.AddControlToGrid("PaddingFrameLabel", "LabelControl", "Padding", 8, 6, "", False)
-    scriptDialog.AddRangeControlToGrid("PaddingFrame", "RangeControl", 1, 1, 10, 0, 1, 8, 7, "", False)
+    scriptDialog.AddRangeControlToGrid("PaddingFrame", "RangeControl", 4, 1, 10, 0, 1, 8, 7, "", True)
     scriptDialog.EndGrid()
     scriptDialog.AddGrid()
     scriptDialog.AddControlToGrid("HuskSettingSeparator", "SeparatorControl", "Husk Setting", 0, 0, colSpan=4)
     scriptDialog.AddControlToGrid("VersionLabel", "LabelControl", "Version", 2, 0, "", False)
-    scriptDialog.AddComboControlToGrid("VersionCombo", "ComboControl", "19.5", houdini_versions, 2, 1, "", False)
+    scriptDialog.AddComboControlToGrid("VersionCombo", "ComboControl", "19.5", houdini_versions, 2, 1, "", True)
     scriptDialog.AddControlToGrid("RendererLabel", "LabelControl", "Renderer", 2, 2, "", False)
-    scriptDialog.AddComboControlToGrid("RendererCombo", "ComboControl", "Karma", houdini_renderers, 2, 3, "", False)
+    scriptDialog.AddComboControlToGrid("RendererCombo", "ComboControl", "Karma", houdini_renderers, 2, 3, "", True)
     scriptDialog.AddSelectionControlToGrid("HoudiniPackageDirCheckBox",
                                            "CheckBoxControl", False, "Houdini Package Dir", 9, 0, "", False)
-    scriptDialog.AddSelectionControlToGrid("HoudiniPackageDirFolder", "FolderBrowserControl", "", "", 9, 1, colSpan=3)
+    scriptDialog.AddSelectionControlToGrid(
+        "HoudiniPackageDirFolder", "FolderBrowserControl", "", "", 9, 1, "", True, colSpan=3)
 
     scriptDialog.EndGrid()
 
@@ -152,6 +153,9 @@ def SubmissionDialog():
                                            "CheckBoxControl", False, "Disable Motion Blur", 8, 0, "")
     scriptDialog.AddSelectionControlToGrid("DisableLightingCheckBox",
                                            "CheckBoxControl", False, "Disable Lighting", 9, 0, "")
+    scriptDialog.AddSelectionControlToGrid("CustomArgumentsCheckBox",
+                                           "CheckBoxControl", False, "Custom Arguments", 10, 0, "")
+    scriptDialog.AddControlToGrid("CustomArgumentsBox", "TextControl", "", 10, 1, colSpan=5)
 
     scriptDialog.EndGrid()
     scriptDialog.EndGroupBox(False)
@@ -223,7 +227,6 @@ def SubmitButtonPressed():
     writer.WriteLine("Priority={}".format(scriptDialog.GetValue("Priority")))
     writer.WriteLine("Pool={}".format(scriptDialog.GetValue("PoolBox")))
     writer.WriteLine("Group={}".format(scriptDialog.GetValue("GroupBox")))
-    
 
     # if a framerange overide is not specified then just grab the nsi file range from the files
     if scriptDialog.GetValue("IncFrame") == 1:
@@ -254,7 +257,6 @@ def SubmitButtonPressed():
     writer.WriteLine("OutputBaseName={}".format(scriptDialog.GetValue("OutputBaseNameBox")))
     writer.WriteLine("OutputExtendName={}".format(scriptDialog.GetValue("OutputExtendNameCombo")))
     writer.WriteLine("PaddingFrame={}".format(scriptDialog.GetValue("PaddingFrameLabel")))
-    
 
     if scriptDialog.GetValue("RenderSettingCheckBox"):
         writer.WriteLine("RenderSetting={}".format(scriptDialog.GetValue("RenderSettingBox")))
@@ -270,8 +272,9 @@ def SubmitButtonPressed():
         writer.WriteLine("Complexity={}".format(scriptDialog.GetValue("ComplexityBox")))
     if scriptDialog.GetValue("HoudiniPackageDirCheckBox"):
         writer.WriteLine("HoudiniPackageDir={}".format(scriptDialog.GetValue("HoudiniPackageDirFolder")))
+    if scriptDialog.GetValue("CustomArgumentsCheckBox"):
+        writer.WriteLine("CustomArguments={}".format(scriptDialog.GetValue("CustomArgumentsBox")))
 
-    
     writer.Close()
 
     # Setup the command line arguments.

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from ast import arguments
 from System import *
 from System.Diagnostics import *
 from System.IO import *
@@ -68,13 +69,15 @@ class HuskStandalone(DeadlinePlugin):
         render_setting = self.GetPluginInfoEntryWithDefault("RenderSetting", "")
         purpose = self.GetPluginInfoEntryWithDefault("Purpose", "")
         complexity = self.GetPluginInfoEntryWithDefault("Complexity", "")
-        output_folder = self.GetPluginInfoEntry("OutputFolder").replace("\\", "/")
+        output_folder = RepositoryUtils.CheckPathMapping(output_folder)
+        output_folder = output_folder.replace("\\", "/")
         if output_folder.endswith("/"):
             output_folder = output_folder[:-1]
         
         output_base_name = self.GetPluginInfoEntry("OutputBaseName").replace("\\", "/")
         output_ext_name = self.GetPluginInfoEntry("OutputExtendName")
         padding_frame = self.GetIntegerPluginInfoEntry("PaddingFrame")
+        custom_arguments = padding_frame = self.GetPluginInfoEntryWithDefault("CustomArguments", "")
 
         argument = ""
         argument += usdFile + " "
@@ -104,6 +107,9 @@ class HuskStandalone(DeadlinePlugin):
             argument += "--postframe-script {} ".format(post_frame_script)
         if post_render_script:
             argument += "--postrender-script {} ".format(post_render_script)
+
+        if custom_arguments:
+            argument += custom_arguments + ' '
 
         argument += "--verbose a{} ".format(self.GetPluginInfoEntry("LogLevel")
                                             )  # alfred style output and full verbosity
