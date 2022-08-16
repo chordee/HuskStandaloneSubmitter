@@ -201,7 +201,8 @@ def SubmissionDialog():
 
     # Load sticky settings
     settings = ("PoolBox", "GroupBox", "Priority", "USDFilePath",
-                "OutputFolder", "OutputBaseNameBox", "OutputExtendNameCombo", "HoudiniPackageDirFolder", "RenderSettingBox", "CameraBox", "VersionCombo", "RendererCombo")
+                "OutputFolder", "OutputBaseNameBox", "OutputExtendNameCombo", "HoudiniPackageDirCheckBox", "HoudiniPackageDirFolder",
+                "RenderSettingBox", "CameraBox", "VersionCombo", "RendererCombo", "PaddingFrame")
     scriptDialog.LoadSettings(GetSettingsFilename(), settings)
     scriptDialog.EnabledStickySaving(settings, GetSettingsFilename())
 

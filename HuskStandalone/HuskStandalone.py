@@ -77,7 +77,7 @@ class HuskStandalone(DeadlinePlugin):
         output_base_name = self.GetPluginInfoEntry("OutputBaseName").replace("\\", "/")
         output_ext_name = self.GetPluginInfoEntry("OutputExtendName")
         padding_frame = self.GetIntegerPluginInfoEntry("PaddingFrame")
-        custom_arguments = padding_frame = self.GetPluginInfoEntryWithDefault("CustomArguments", "")
+        custom_arguments = self.GetPluginInfoEntryWithDefault("CustomArguments", "")
 
         argument = ""
         argument += usdFile + " "
@@ -89,9 +89,9 @@ class HuskStandalone(DeadlinePlugin):
 
         argument += "--renderer {} ".format(renderer)
 
-        if self.GetBooleanPluginInfoEntry("DisableLighting"):
+        if self.GetBooleanPluginInfoEntryWithDefault("DisableLighting", False):
             argument += "--disable-lighting "
-        if self.GetBooleanPluginInfoEntry("DisableMotionBlur"):
+        if self.GetBooleanPluginInfoEntryWithDefault("DisableMotionBlur", False):
             argument += "--disable-motionblur "
 
         if purpose:
