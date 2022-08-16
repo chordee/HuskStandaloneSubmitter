@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-from ast import arguments
 from System import *
 from System.Diagnostics import *
 from System.IO import *
@@ -69,6 +68,7 @@ class HuskStandalone(DeadlinePlugin):
         render_setting = self.GetPluginInfoEntryWithDefault("RenderSetting", "")
         purpose = self.GetPluginInfoEntryWithDefault("Purpose", "")
         complexity = self.GetPluginInfoEntryWithDefault("Complexity", "")
+        output_folder = self.GetPluginInfoEntry("OutputFolder")
         output_folder = RepositoryUtils.CheckPathMapping(output_folder)
         output_folder = output_folder.replace("\\", "/")
         if output_folder.endswith("/"):

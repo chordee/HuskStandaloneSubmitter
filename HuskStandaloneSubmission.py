@@ -256,7 +256,7 @@ def SubmitButtonPressed():
     writer.WriteLine("OutputFolder={}".format(scriptDialog.GetValue("OutputFolder")))
     writer.WriteLine("OutputBaseName={}".format(scriptDialog.GetValue("OutputBaseNameBox")))
     writer.WriteLine("OutputExtendName={}".format(scriptDialog.GetValue("OutputExtendNameCombo")))
-    writer.WriteLine("PaddingFrame={}".format(scriptDialog.GetValue("PaddingFrameLabel")))
+    writer.WriteLine("PaddingFrame={}".format(scriptDialog.GetValue("PaddingFrame")))
 
     if scriptDialog.GetValue("RenderSettingCheckBox"):
         writer.WriteLine("RenderSetting={}".format(scriptDialog.GetValue("RenderSettingBox")))
