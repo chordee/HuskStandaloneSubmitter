@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-
 from System import *
 from System.Diagnostics import *
 from System.IO import *
 
-import os
+import os, re
 
 from Deadline.Plugins import *
 from Deadline.Scripting import *
@@ -74,9 +73,7 @@ class HuskStandalone(DeadlinePlugin):
         if output_folder.endswith("/"):
             output_folder = output_folder[:-1]
         
-        output_base_name = self.GetPluginInfoEntry("OutputBaseName").replace("\\", "/")
-        output_ext_name = self.GetPluginInfoEntry("OutputExtendName")
-        padding_frame = self.GetIntegerPluginInfoEntry("PaddingFrame")
+        output_file_name = self.GetPluginInfoEntry("OutputFileName").replace("\\", "/")
         custom_arguments = self.GetPluginInfoEntryWithDefault("CustomArguments", "")
 
         argument = ""
@@ -120,9 +117,12 @@ class HuskStandalone(DeadlinePlugin):
 
         # renderer handled in job file.
         # [:-4] We are now going to site the composite USD in the project root.
-
+        padding_frame = len(re.findall("#", output_file_name))
+        splitter = '#'*padding_frame
+        output_base_name = output_file_name.split(splitter)[0]
+        output_ext_name = output_file_name.split(splitter)[1]
         paddedFrameNumber = StringUtils.ToZeroPaddedString(frameNumber, padding_frame)
-        argument += "-o {0}/{1}.{2}.{3} ".format(output_folder, output_base_name, paddedFrameNumber, output_ext_name)
+        argument += "-o {0}/{1}{2}{3} ".format(output_folder, output_base_name, paddedFrameNumber, output_ext_name)
         argument += " --make-output-path" + " "
 
         houdini_package_dir = self.GetPluginInfoEntryWithDefault("HoudiniPackageDir", "")

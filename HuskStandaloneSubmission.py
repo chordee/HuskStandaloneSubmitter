@@ -1,4 +1,5 @@
-import IntegrationUI
+#!/usr/bin/env python3
+# import IntegrationUI
 import re
 import sys
 import os
@@ -105,11 +106,8 @@ def SubmissionDialog():
 
     scriptDialog.AddControlToGrid("OutputFolderLabel", "LabelControl", "Output Folder", 5, 0, "", False)
     scriptDialog.AddSelectionControlToGrid("OutputFolder", "FolderBrowserControl", "", "", 5, 1, colSpan=7)
-    scriptDialog.AddControlToGrid("OutputBaseNameLabel", "LabelControl", "BaseName", 6, 0, "", False)
-    scriptDialog.AddControlToGrid("OutputBaseNameBox", "TextControl", "", 6, 1, colSpan=5)
-    scriptDialog.AddControlToGrid("OutputExtendNameLabel", "LabelControl", "Ext", 6, 6, "", False)
-    scriptDialog.AddComboControlToGrid("OutputExtendNameCombo", "ComboControl",
-                                       "exr", ["exr", "png", "tif"], 6, 7, "", True)
+    scriptDialog.AddControlToGrid("OutputFileNameLabel", "LabelControl", "FileName", 6, 0, "", False)
+    scriptDialog.AddControlToGrid("OutputFileNameBox", "TextControl", "", 6, 1, colSpan=5)
 
     # Frame Boxes
     scriptDialog.AddControlToGrid("StartFrameLabel", "LabelControl", "Start Frame", 8, 0, "Start Frame", False)
@@ -118,8 +116,6 @@ def SubmissionDialog():
     scriptDialog.AddRangeControlToGrid("EndFrame", "RangeControl", 2, -65535, 65535, 0, 1, 8, 3, "", True)
     scriptDialog.AddControlToGrid("IncFrameLabel", "LabelControl", "inc", 8, 4, "Render every X frame", False)
     scriptDialog.AddRangeControlToGrid("IncFrame", "RangeControl", 1, 1, 100, 0, 1, 8, 5, "", True)
-    scriptDialog.AddControlToGrid("PaddingFrameLabel", "LabelControl", "Padding", 8, 6, "", False)
-    scriptDialog.AddRangeControlToGrid("PaddingFrame", "RangeControl", 4, 1, 10, 0, 1, 8, 7, "", True)
     scriptDialog.EndGrid()
     scriptDialog.AddGrid()
     scriptDialog.AddControlToGrid("HuskSettingSeparator", "SeparatorControl", "Husk Setting", 0, 0, colSpan=4)
@@ -255,9 +251,7 @@ def SubmitButtonPressed():
     writer.WriteLine("PostRenderScript={}".format(scriptDialog.GetValue("PostRenderScriptBox")))
     writer.WriteLine("Version={}".format(scriptDialog.GetValue("VersionCombo")))
     writer.WriteLine("OutputFolder={}".format(scriptDialog.GetValue("OutputFolder")))
-    writer.WriteLine("OutputBaseName={}".format(scriptDialog.GetValue("OutputBaseNameBox")))
-    writer.WriteLine("OutputExtendName={}".format(scriptDialog.GetValue("OutputExtendNameCombo")))
-    writer.WriteLine("PaddingFrame={}".format(scriptDialog.GetValue("PaddingFrame")))
+    writer.WriteLine("OutputFileName={}".format(scriptDialog.GetValue("OutputFileNameBox")))
 
     if scriptDialog.GetValue("RenderSettingCheckBox"):
         writer.WriteLine("RenderSetting={}".format(scriptDialog.GetValue("RenderSettingBox")))
