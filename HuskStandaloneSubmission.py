@@ -197,6 +197,13 @@ CONTROLS = {  # End key with _,+ or - for group, expanded group or collapsed gro
 				"When disabled or blank defaults to either the RenderPass.renderSource "
 				"(if --pass is set) or the layer's renderSettingsPrimPath metadata."))],
 		[Control(
+			name = 'separate_jobs',
+			label = '',
+			type = ControlType.checkbox,
+			value = [False, 'Separate Jobs'],
+			tooltip = (
+				'Submit each specified render settings prim as a separate render job.'))],
+		[Control(
 			name = '--slap-comp',
 			label = 'Slap Comp',
 			type = ControlType.text,
@@ -547,7 +554,7 @@ def parse_prim_pattern(
 	return result
 
 
-def determine_outputs(render_info: RenderInfo, pass_value: str, settings_value: str, output_value: str) -> dict[str, tuple[list[str], list[str]]]:
+def determine_outputs(render_info: RenderInfo, pass_value: str, settings_value: str, output_value: str) -> dict[str, dict[str, list[str]]]:
 	'''
 	Determines the appropriate values for settings and output for each pass
 	based on the values provided by looking into the usd file.
@@ -557,8 +564,8 @@ def determine_outputs(render_info: RenderInfo, pass_value: str, settings_value: 
 	Render Product drives output/ProductNames
 
 	Outputs a dictionary with passes as keys
-	and a tuple of lists of settings and productnames as values.
-	eg. {'pass1': ([settings1, settings2], [productname1, productname2])}
+	and the values as dictionaries with settings as keys and lists of productnames as values.
+	eg. {'pass1': {settings1: [productname1, productname2]}}}
 	'''
 	result = {}
 	pass_prims = parse_prim_pattern(pass_value, render_info, 'RenderPass') if pass_value else []
@@ -586,14 +593,15 @@ def determine_outputs(render_info: RenderInfo, pass_value: str, settings_value: 
 			continue
 
 		# Get product names from products from settings
-		pass_productnames = []
+		pass_settings_dict = {}
 		for pass_setting in pass_settings:
+			pass_settings_dict[pass_setting] = []
 			for pass_setting_product in render_info.relationships[pass_setting]:
 				for pass_setting_productname in render_info.relationships[pass_setting_product]:
 					if pass_setting_productname in render_info.ProductName:
-						pass_productnames.append(pass_setting_productname)
+						pass_settings_dict[pass_setting].append(pass_setting_productname)
 
-		result[pass_prim] = (pass_settings, pass_productnames)
+		result[pass_prim] = (pass_settings_dict)
 
 	return result
 
@@ -660,7 +668,18 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 				for x in ('--pass', '--settings', '--output'))
 			)
 		
-		for pass_prim, (settings_prims, productnames) in outputs.items():
+		# Detemine Job Submissions
+		prim_submissions = []
+		for pass_prim, pass_settings_dict in outputs.items():
+			if not dialog.GetValue('separate_jobs'):
+				settings_prims = list(pass_settings_dict.keys())
+				productnames = list(set([pn for pn_list in pass_settings_dict.values() for pn in pn_list ]))
+				prim_submissions.append((pass_prim, settings_prims, productnames))
+			else:
+				for settings_prim, productnames in pass_settings_dict.items():
+					prim_submissions.append((pass_prim, [settings_prim], productnames))
+		
+		for pass_prim, settings_prims, productnames in prim_submissions:
 			pass_arguments = arguments.copy()
 			if pass_prim == '':
 				pass_arguments['override_--pass'] = False
@@ -673,6 +692,8 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 			job_name_suffix = ''
 			if pass_prim != '':
 				job_name_suffix = '_' + os.path.basename(pass_prim)
+			if dialog.GetValue('separate_jobs'):
+				job_name_suffix = '_' + os.path.basename(settings_prims[0])
 
 			#Create Job file
 			job_info_filename = Path.Combine( GetDeadlineTempPath(), 'husk_job_info.job' )
