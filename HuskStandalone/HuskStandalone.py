@@ -101,8 +101,10 @@ class HuskStandalone(DeadlinePlugin):
 
 		self.LogInfo(f"Rendering USD file: {usd_file_path}")
 
-		# Do karma GPU Environment vars
-		self.KarmaGPUAffinity()
+		# Do GPU Affinity Environment vars
+		if self.OverrideGpuAffinity():
+			self.KarmaGPUAffinity()
+			self.RedshiftGPUAffinity()
 
 		return argument
 
@@ -125,13 +127,21 @@ class HuskStandalone(DeadlinePlugin):
 		MAX_GPUS = 4
 		VAR_STRING_TEMPLATE = "KARMA_XPU_DISABLE_DEVICE_{}"
 
-		if self.OverrideGpuAffinity():
-			selected_GPUs = list(self.GpuAffinity())
-			print("SELECTED GPUS", selected_GPUs)
+		selected_GPUs = list(self.GpuAffinity())
+		print("Setting Karma GPUs", selected_GPUs)
 
-			for gpu in range(MAX_GPUS):
-				if gpu in selected_GPUs:
-					continue
+		for gpu in range(MAX_GPUS):
+			if gpu in selected_GPUs:
+				continue
 
-				os.environ[VAR_STRING_TEMPLATE.format(gpu)] = "1"
+			os.environ[VAR_STRING_TEMPLATE.format(gpu)] = "1"
+
+
+	def RedshiftGPUAffinity(self):
+		'''
+		Set which GPUs to use using Redshift Environment Variable
+		'''
+		selected_GPUs = list(self.GpuAffinity())
+		print("Setting Redshift GPUs", selected_GPUs)
+		os.environ['REDSHIFT_GPUDEVICES'] = ','.join([str(x) for x in selected_GPUs])
 

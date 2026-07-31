@@ -163,7 +163,7 @@ CONTROLS = {  # End key with _,+ or - for group, expanded group or collapsed gro
 			name = '--renderer',
 			label = 'Renderer',
 			type = ControlType.combo,
-			value = ['', ['BRAY_HdKarmaXPU', 'BRAY_HdKarma']],
+			value = ['', ['BRAY_HdKarmaXPU', 'BRAY_HdKarma', 'HdRedshiftRendererPlugin']],
 			tooltip = "Specify Hydra client.")],
 		[Control(
 			name = '--pixel-samples',
