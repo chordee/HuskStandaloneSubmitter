@@ -603,7 +603,6 @@ def determine_outputs(render_info: RenderInfo, pass_value: str, settings_value: 
 		for pass_setting in pass_settings:
 			pass_settings_dict[pass_setting] = []
 			for pass_setting_product in render_info.relationships[pass_setting]:
-				print(pass_prim, pass_setting, pass_setting_product)
 				for pass_setting_productname in render_info.relationships[pass_setting_product]:
 					if pass_setting_productname in render_info.ProductName:
 						pass_settings_dict[pass_setting].append(pass_setting_productname)
