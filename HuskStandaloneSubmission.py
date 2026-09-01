@@ -468,17 +468,23 @@ def get_render_info(path: str) -> RenderInfo:
 			continue
 
 		# Find Relationships
-		match = re.search(r'(?:rel|token) (?P<type>products|renderSource|orderedVars|productName\.timeSamples) = <?(?P<path>[^>]+)>?', line)
+		match = re.search(r'(?:rel|token) (?P<type>products|renderSource|orderedVars|productName(?:\.timeSamples)?) = (?P<path>.+)', line)
 		if match:
+			matched_path = match.groupdict()['path'].strip('<>"')
+			prim_type = match.groupdict()['type']
+
+			if prim_type == 'productName':
+				result.ProductName.append(matched_path)
+
 			if accum_path not in result.relationships:
 				result.relationships[accum_path] = []
 
-			if match.groupdict()['path'] == '[':
+			if matched_path == '[':
 				resume = [r'<(.*)>', ']']
-			elif match.groupdict()['path'] == '{': 
+			elif matched_path == '{': 
 				resume = [r'\d+: "(.+)",', '}']
 			else:
-				result.relationships[accum_path].append(match.groupdict()['path'])
+				result.relationships[accum_path].append(matched_path)
 
 	return result
 
@@ -597,6 +603,7 @@ def determine_outputs(render_info: RenderInfo, pass_value: str, settings_value: 
 		for pass_setting in pass_settings:
 			pass_settings_dict[pass_setting] = []
 			for pass_setting_product in render_info.relationships[pass_setting]:
+				print(pass_prim, pass_setting, pass_setting_product)
 				for pass_setting_productname in render_info.relationships[pass_setting_product]:
 					if pass_setting_productname in render_info.ProductName:
 						pass_settings_dict[pass_setting].append(pass_setting_productname)
@@ -668,7 +675,7 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 				for x in ('--pass', '--settings', '--output'))
 			)
 		
-		# Detemine Job Submissions
+		# Determine Job Submissions
 		prim_submissions = []
 		for pass_prim, pass_settings_dict in outputs.items():
 			if not dialog.GetValue('separate_jobs'):
