@@ -320,7 +320,7 @@ CONTROLS = {  # End key with _,+ or - for group, expanded group or collapsed gro
 			type = ControlType.checkbox,
 			value = [False, 'Disable Motion Blur'],
 			tooltip = (
-				"Disable all lights in the scene.\n"
+				"Disable motion blur in the scene.\n"
 				"This option applies to all render delegates."))],
 	],
 }

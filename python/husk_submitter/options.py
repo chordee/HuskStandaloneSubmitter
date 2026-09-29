@@ -142,7 +142,7 @@ OPTIONS: tuple[HuskOption, ...] = (
 		'This option applies to all render delegates.'),
 	HuskOption(
 		'--disable-motionblur', 'Disable Motion Blur', Kind.BOOL, False, USD,
-		'Disable all lights in the scene.\n'
+		'Disable motion blur in the scene.\n'
 		'This option applies to all render delegates.'),
 )
 
