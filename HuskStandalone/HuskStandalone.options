@@ -205,6 +205,8 @@ Index=20
 Description=Comma separated list of output image file paths.
 These can contain certain local variables:
 eg. $F/<F>/%d, $F4/<F4>/%04d, $FF/<FF>/%g
+Submitter tokens expanded per job:
+{usd} USD file name, {pass} RenderPass name, {settings} RenderSettings name
 Filter=
 DefaultValue=
 Type=FilenameSave

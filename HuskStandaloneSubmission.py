@@ -1,6 +1,8 @@
 import os
+import pathlib
 import subprocess
 import re
+from collections import Counter
 from enum import Enum
 from functools import partial
 from dataclasses import dataclass, field
@@ -53,6 +55,14 @@ class RenderInfo:
 	relationships: dict[str, list[str]] = field(default_factory=dict)
 
 
+@dataclass
+class JobSubmission:
+	name: str
+	frame_list: str
+	productnames: list[str]
+	arguments: dict = field(default_factory=dict)
+
+
 def get_usdcat() -> str:
 	'''
 	Sets the USDCAT variable to the usdcat executable based on the husk executable.
@@ -63,14 +73,13 @@ def get_usdcat() -> str:
 	if not executable:
 		raise Exception("Husk executable not found.")
 
-	usdcat = executable.split('husk')[0] + 'usdcat'
-	if os.name == 'nt':
-		usdcat += '.exe'
+	husk = pathlib.Path(executable)
+	usdcat = husk.with_name('usdcat' + husk.suffix)
 
-	if not os.path.exists(usdcat):
+	if not usdcat.exists():
 		raise Exception("Houdini usdcat binary not found.")
-	
-	return usdcat
+
+	return str(usdcat)
 
 
 def save_browser_location(path: str) -> None:
@@ -117,6 +126,8 @@ def files_selected(dialog: DeadlineScriptDialog):
 USDCAT = get_usdcat()
 WINDOW_TITLE = 'Deadline Husk Submitter'
 MAX_COLUMNS = 6
+MAX_LISTED_COLLISIONS = 5
+OUTPUT_TOKEN_PATTERN = re.compile(r'\{(usd|pass|settings)\}')
 CONTROLS = {  # End key with _,+ or - for group, expanded group or collapsed group
 	'Submission_': [
 		[Control(
@@ -263,7 +274,9 @@ CONTROLS = {  # End key with _,+ or - for group, expanded group or collapsed gro
 			tooltip = (
 				"Comma separated list of output image file paths.\n"
 				"These can contain certain local variables:\n"
-				"eg. $F/<F>/%d, $F4/<F4>/%04d, $FF/<FF>/%g"))],
+				"eg. $F/<F>/%d, $F4/<F4>/%04d, $FF/<FF>/%g\n"
+				"Submitter tokens expanded per job:\n"
+				"{usd} USD file name, {pass} RenderPass name, {settings} RenderSettings name"))],
 	],
 
 	'USD-': [
@@ -403,7 +416,9 @@ def get_render_info(path: str) -> RenderInfo:
 	accum_path:str = ''
 	accum_depth:int = -1
 
-	usdcat = subprocess.check_output([USDCAT, '--flatten', '--mask', '/Render', path], text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+	# CREATE_NO_WINDOW only exists on Windows
+	creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+	usdcat = subprocess.check_output([USDCAT, '--flatten', '--mask', '/Render', path], text=True, creationflags=creationflags)
 	finished_metadata = False
 	resume = []
 	for line in usdcat.splitlines():
@@ -595,7 +610,7 @@ def determine_outputs(render_info: RenderInfo, pass_value: str, settings_value: 
 		# Next determine associated productnames
 		# Use override productnames if supplied
 		if productnames:
-			result[pass_prim] = (pass_settings, productnames)
+			result[pass_prim] = {pass_setting: productnames for pass_setting in pass_settings}
 			continue
 
 		# Get product names from products from settings
@@ -612,30 +627,11 @@ def determine_outputs(render_info: RenderInfo, pass_value: str, settings_value: 
 	return result
 
 
-def submit_pressed(dialog: DeadlineScriptDialog) -> None:
-	usd_file_paths_string = dialog.GetValue('file_paths_control')
-	
-	if not usd_file_paths_string:
-		dialog.ShowMessageBox('No USD Files Selected', 'Error')
-		return
-
-	usd_file_paths = usd_file_paths_string.split(';')
-
-	# Ensure valid framerange
-	if not dialog.GetValue('framerange_control_1') >= dialog.GetValue('framerange_control_0'):
-		dialog.ShowMessageBox( "End Frame must be higher than Start Frame", "Error" )
-		return
-
-	# Get dialog values
-	override_frames = dialog.GetValue('override_framerange_control')
-	frame_list = f"{dialog.GetValue('framerange_control_0')}-{dialog.GetValue('framerange_control_1')}"
-	batch_name = dialog.GetValue('batch_control')
-	comment = dialog.GetValue('comment_control')
-	chunk_size = dialog.GetValue('chunk_control')
-
+def get_argument_values(dialog: DeadlineScriptDialog) -> dict:
+	'''
+	Collect the husk argument values and their override toggles from the dialog.
+	'''
 	arguments = {}
-
-	# Get Argument Values
 	for control_rows in CONTROLS.values():
 		for control_row in control_rows:
 			for control in control_row:
@@ -653,88 +649,189 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 				else:
 					arguments[control.name] = dialog.GetValue(control.name)
 
-	# Iterate through files and submit each USD
+	return arguments
+
+
+def group_prim_submissions(
+	outputs: dict[str, dict[str, list[str]]],
+	separate_jobs: bool) -> list[tuple[str, list[str], list[str]]]:
+	'''
+	Group the determined outputs into (pass, settings prims, productnames) per job.
+	One job per pass, or one job per pass and settings prim when separate_jobs is set.
+	'''
+	prim_submissions = []
+	for pass_prim, pass_settings_dict in outputs.items():
+		if not separate_jobs:
+			settings_prims = list(pass_settings_dict.keys())
+			# Dedupe while preserving order, as --output maps to products by position
+			productnames = list(dict.fromkeys(pn for pn_list in pass_settings_dict.values() for pn in pn_list))
+			prim_submissions.append((pass_prim, settings_prims, productnames))
+		else:
+			for settings_prim, productnames in pass_settings_dict.items():
+				prim_submissions.append((pass_prim, [settings_prim], productnames))
+
+	return prim_submissions
+
+
+def expand_output_tokens(path: str, usd_file_path: str, pass_prim: str, settings_prims: list[str]) -> str:
+	'''
+	Expand submitter tokens in an output path.
+	Husk variables such as $F4 and <F4> are left for husk to expand.
+
+	{usd}: USD file name without extension
+	{pass}: RenderPass prim name, empty when no pass is used
+	{settings}: RenderSettings prim name, the first one when a job renders multiple
+	'''
+	tokens = {
+		'usd': os.path.splitext(os.path.basename(usd_file_path))[0],
+		'pass': os.path.basename(pass_prim),
+		'settings': os.path.basename(settings_prims[0]) if settings_prims else '',
+	}
+	expanded = OUTPUT_TOKEN_PATTERN.sub(lambda match: tokens[match.group(1)], path)
+	# Collapse separators doubled by empty tokens, keeping a leading UNC prefix
+	return re.sub(r'(?<=.)[\\/]{2,}', '/', expanded)
+
+
+def build_jobs(dialog: DeadlineScriptDialog, usd_file_path: str, arguments: dict) -> list[JobSubmission]:
+	'''
+	Parse the USD file and build the jobs to submit for it.
+	'''
+	render_info: RenderInfo = get_render_info(usd_file_path)
+	separate_jobs = dialog.GetValue('separate_jobs')
+
+	if dialog.GetValue('override_framerange_control'):
+		frame_list = f"{dialog.GetValue('framerange_control_0')}-{dialog.GetValue('framerange_control_1')}"
+	else:
+		# Use frame range from usd file
+		frame_list = f"{render_info.startTimeCode}-{render_info.endTimeCode}"
+
+	outputs = determine_outputs(
+			render_info,
+			*(arguments[x] if arguments[f'override_{x}'] else ''
+			for x in ('--pass', '--settings', '--output'))
+		)
+
+	jobs = []
+	for pass_prim, settings_prims, productnames in group_prim_submissions(outputs, separate_jobs):
+		job_arguments = arguments.copy()
+		if pass_prim == '':
+			job_arguments['override_--pass'] = False
+		job_arguments['--pass'] = pass_prim
+		job_arguments['override_--settings'] = True
+		job_arguments['--settings'] = ','.join(settings_prims)
+		productnames = [
+			expand_output_tokens(pn, usd_file_path, pass_prim, settings_prims)
+			for pn in productnames]
+		job_arguments['override_--output'] = True
+		job_arguments['--output'] = ','.join(productnames)
+		job_arguments['--usd-input'] = usd_file_path
+
+		job_name_suffix = ''
+		if pass_prim != '':
+			job_name_suffix = '_' + os.path.basename(pass_prim)
+		if separate_jobs:
+			job_name_suffix += '_' + os.path.basename(settings_prims[0])
+
+		jobs.append(JobSubmission(
+			name = os.path.basename(usd_file_path) + job_name_suffix,
+			frame_list = frame_list,
+			productnames = productnames,
+			arguments = job_arguments))
+
+	return jobs
+
+
+def submit_job(job: JobSubmission, batch_name: str, comment: str, chunk_size: int) -> str:
+	'''
+	Write the job and plugin info files and submit them to Deadline.
+	Returns the deadlinecommand output.
+	'''
+	#Create Job file
+	job_info_filename = Path.Combine( GetDeadlineTempPath(), 'husk_job_info.job' )
+	writer = StreamWriter( job_info_filename, False, Encoding.Unicode )
+	writer.WriteLine( 'Plugin=HuskStandalone' )
+	writer.WriteLine( f'Name={job.name}')
+	if batch_name:
+		writer.WriteLine( f'BatchName={batch_name}')
+	writer.WriteLine( f'Comment={comment}')
+	writer.WriteLine( f'Frames={job.frame_list}')
+	writer.WriteLine( f'ChunkSize={chunk_size}')
+	for i, productname in enumerate(job.productnames):
+		writer.WriteLine( f'OutputFilename{i}={productname}' )
+	writer.Close()
+
+	# Create plugin info file.
+	plugin_info_filename = Path.Combine( GetDeadlineTempPath(), 'husk_plugin_info.job' )
+	writer = StreamWriter( plugin_info_filename, False, Encoding.Unicode )
+	writer.WriteLine( f'ArgumentList={";".join(job.arguments.keys())}')
+	for argument, value in job.arguments.items():
+		writer.WriteLine( f'{argument}={value}' )
+	writer.Close()
+
+	# Setup the command line arguments.
+	job_arguments = StringCollection()
+	job_arguments.Add( job_info_filename )
+	job_arguments.Add( plugin_info_filename )
+
+	return ClientUtils.ExecuteCommandAndGetOutput( job_arguments )
+
+
+def submit_pressed(dialog: DeadlineScriptDialog) -> None:
+	usd_file_paths_string = dialog.GetValue('file_paths_control')
+	
+	if not usd_file_paths_string:
+		dialog.ShowMessageBox('No USD Files Selected', 'Error')
+		return
+
+	usd_file_paths = usd_file_paths_string.split(';')
+
+	# Ensure valid framerange
+	if (dialog.GetValue('override_framerange_control')
+			and not dialog.GetValue('framerange_control_1') >= dialog.GetValue('framerange_control_0')):
+		dialog.ShowMessageBox( "End Frame must be higher than Start Frame", "Error" )
+		return
+
+	arguments = get_argument_values(dialog)
+
+	# Build every job up front so nothing is submitted if the user cancels
 	results = {'success': {}, 'fail': {}}
-	for job_index, usd_file_path in enumerate(usd_file_paths):
+	jobs: list[JobSubmission] = []
+	for usd_file_path in usd_file_paths:
 		if not os.path.exists(usd_file_path):
 			dialog.ShowMessageBox( "USD file doesn't exist!\n" + usd_file_path, 'Error' )
-			results['fail'][os.path.basename(usd_file_path)] = "USD file doesn't exist"
+			results['fail'][usd_file_path] = "USD file doesn't exist"
 			continue
+		# A usdcat failure on one file should not abort the whole submission
+		try:
+			jobs.extend(build_jobs(dialog, usd_file_path, arguments))
+		except (subprocess.CalledProcessError, OSError) as error:
+			results['fail'][usd_file_path] = f'Failed to read USD file: {error}'
 
-		job_name = os.path.basename(usd_file_path)
-		render_info: RenderInfo = get_render_info(usd_file_path)
+	# Warn when multiple jobs would write to the same output files
+	output_counts = Counter(pn for job in jobs for pn in set(job.productnames))
+	collisions = [pn for pn, count in output_counts.items() if count > 1]
+	if collisions:
+		answer = dialog.ShowMessageBox(
+			'Multiple render jobs will write to the same output files:\n'
+			+ '\n'.join(collisions[:MAX_LISTED_COLLISIONS])
+			+ ('\n...' if len(collisions) > MAX_LISTED_COLLISIONS else '')
+			+ '\n\nUse {usd}, {pass} or {settings} in Output/s to make them unique.\n'
+			'Continue submitting?',
+			'Warning', ('Yes', 'No'))
+		if answer != 'Yes':
+			return
 
-		# Use frame range from usd file
-		if not override_frames:
-			frame_list = f"{render_info.startTimeCode}-{render_info.endTimeCode}"
+	batch_name = dialog.GetValue('batch_control')
+	comment = dialog.GetValue('comment_control')
+	chunk_size = dialog.GetValue('chunk_control')
 
-		outputs = determine_outputs(
-				render_info,
-				*(dialog.GetValue(x) if dialog.GetValue(f'override_{x}') else ''
-				for x in ('--pass', '--settings', '--output'))
-			)
-		
-		# Determine Job Submissions
-		prim_submissions = []
-		for pass_prim, pass_settings_dict in outputs.items():
-			if not dialog.GetValue('separate_jobs'):
-				settings_prims = list(pass_settings_dict.keys())
-				productnames = list(set([pn for pn_list in pass_settings_dict.values() for pn in pn_list ]))
-				prim_submissions.append((pass_prim, settings_prims, productnames))
-			else:
-				for settings_prim, productnames in pass_settings_dict.items():
-					prim_submissions.append((pass_prim, [settings_prim], productnames))
-		
-		for pass_prim, settings_prims, productnames in prim_submissions:
-			pass_arguments = arguments.copy()
-			if pass_prim == '':
-				pass_arguments['override_--pass'] = False
-			pass_arguments['--pass'] = pass_prim
-			pass_arguments['override_--settings'] = True
-			pass_arguments['--settings'] = ','.join(settings_prims)
-			pass_arguments['override_--output'] = True
-			pass_arguments['--output'] = ','.join(productnames)
-
-			job_name_suffix = ''
-			if pass_prim != '':
-				job_name_suffix = '_' + os.path.basename(pass_prim)
-			if dialog.GetValue('separate_jobs'):
-				job_name_suffix = '_' + os.path.basename(settings_prims[0])
-
-			#Create Job file
-			job_info_filename = Path.Combine( GetDeadlineTempPath(), 'husk_job_info.job' )
-			writer = StreamWriter( job_info_filename, False, Encoding.Unicode )
-			writer.WriteLine( 'Plugin=HuskStandalone' )
-			writer.WriteLine( f'Name={job_name + job_name_suffix}')
-			if batch_name:
-				writer.WriteLine( f'BatchName={batch_name}')
-			writer.WriteLine( f'Comment={comment}')
-			writer.WriteLine( f'Frames={frame_list}')
-			writer.WriteLine( f'ChunkSize={chunk_size}')
-			for i, productname in enumerate(productnames):
-				writer.WriteLine( f'OutputFilename{i}={productname}' )
-			writer.Close()
-
-			# Create plugin info file.
-			plugin_info_filename = Path.Combine( GetDeadlineTempPath(), 'husk_plugin_info.job' )
-			writer = StreamWriter( plugin_info_filename, False, Encoding.Unicode )
-			pass_arguments['--usd-input'] = usd_file_path
-			writer.WriteLine( f'ArgumentList={";".join(pass_arguments.keys())}')
-			for argument, value in pass_arguments.items():
-				writer.WriteLine( f'{argument}={value}' )
-			writer.Close()
-
-			# Setup the command line arguments.
-			job_arguments = StringCollection()
-			job_arguments.Add( job_info_filename )
-			job_arguments.Add( plugin_info_filename )
-
-			# Progress in titlebar
-			dialog.SetTitle(f'{WINDOW_TITLE} - Submitting Job {job_index + 1}')
-
-			# Now submit the job.
-			result = ClientUtils.ExecuteCommandAndGetOutput( job_arguments )
-			results['success' if 'Result=Success' in result else 'fail'][job_name] = result
+	for job_index, job in enumerate(jobs):
+		# Progress in titlebar
+		dialog.SetTitle(f'{WINDOW_TITLE} - Submitting Job {job_index + 1}/{len(jobs)}')
+		result = submit_job(job, batch_name, comment, chunk_size)
+		# Key by directory and job name so same-named USD files in different directories stay separate
+		result_key = os.path.join(os.path.dirname(job.arguments['--usd-input']), job.name)
+		results['success' if 'Result=Success' in result else 'fail'][result_key] = result
 
 	# Display results/errors
 	dialog.SetTitle(f'{WINDOW_TITLE} - Submission Complete')
