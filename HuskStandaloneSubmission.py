@@ -730,7 +730,7 @@ def build_jobs(dialog: DeadlineScriptDialog, usd_file_path: str, arguments: dict
 		if pass_prim != '':
 			job_name_suffix = '_' + os.path.basename(pass_prim)
 		if separate_jobs:
-			job_name_suffix = '_' + os.path.basename(settings_prims[0])
+			job_name_suffix += '_' + os.path.basename(settings_prims[0])
 
 		jobs.append(JobSubmission(
 			name = os.path.basename(usd_file_path) + job_name_suffix,
@@ -786,7 +786,8 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 	usd_file_paths = usd_file_paths_string.split(';')
 
 	# Ensure valid framerange
-	if not dialog.GetValue('framerange_control_1') >= dialog.GetValue('framerange_control_0'):
+	if (dialog.GetValue('override_framerange_control')
+			and not dialog.GetValue('framerange_control_1') >= dialog.GetValue('framerange_control_0')):
 		dialog.ShowMessageBox( "End Frame must be higher than Start Frame", "Error" )
 		return
 
@@ -800,7 +801,11 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 			dialog.ShowMessageBox( "USD file doesn't exist!\n" + usd_file_path, 'Error' )
 			results['fail'][os.path.basename(usd_file_path)] = "USD file doesn't exist"
 			continue
-		jobs.extend(build_jobs(dialog, usd_file_path, arguments))
+		# A usdcat failure on one file should not abort the whole submission
+		try:
+			jobs.extend(build_jobs(dialog, usd_file_path, arguments))
+		except (subprocess.CalledProcessError, OSError) as error:
+			results['fail'][os.path.basename(usd_file_path)] = f'Failed to read USD file: {error}'
 
 	# Warn when multiple jobs would write to the same output files
 	output_counts = Counter(pn for job in jobs for pn in set(job.productnames))
