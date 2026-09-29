@@ -799,13 +799,13 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 	for usd_file_path in usd_file_paths:
 		if not os.path.exists(usd_file_path):
 			dialog.ShowMessageBox( "USD file doesn't exist!\n" + usd_file_path, 'Error' )
-			results['fail'][os.path.basename(usd_file_path)] = "USD file doesn't exist"
+			results['fail'][usd_file_path] = "USD file doesn't exist"
 			continue
 		# A usdcat failure on one file should not abort the whole submission
 		try:
 			jobs.extend(build_jobs(dialog, usd_file_path, arguments))
 		except (subprocess.CalledProcessError, OSError) as error:
-			results['fail'][os.path.basename(usd_file_path)] = f'Failed to read USD file: {error}'
+			results['fail'][usd_file_path] = f'Failed to read USD file: {error}'
 
 	# Warn when multiple jobs would write to the same output files
 	output_counts = Counter(pn for job in jobs for pn in set(job.productnames))
@@ -829,7 +829,9 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 		# Progress in titlebar
 		dialog.SetTitle(f'{WINDOW_TITLE} - Submitting Job {job_index + 1}/{len(jobs)}')
 		result = submit_job(job, batch_name, comment, chunk_size)
-		results['success' if 'Result=Success' in result else 'fail'][job.name] = result
+		# Key by directory and job name so same-named USD files in different directories stay separate
+		result_key = os.path.join(os.path.dirname(job.arguments['--usd-input']), job.name)
+		results['success' if 'Result=Success' in result else 'fail'][result_key] = result
 
 	# Display results/errors
 	dialog.SetTitle(f'{WINDOW_TITLE} - Submission Complete')
