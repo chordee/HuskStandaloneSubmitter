@@ -52,6 +52,41 @@ Go to Submit > HuskStandalone
 ### Terminal/Script
 `deadlinecommand ExecuteScript <path/to/HuskStandaloneSubmission.py> [usd_paths] --modal`
 
+## Houdini Submitter (Houdini 21+)
+A submitter that runs inside Houdini and reads USD with Houdini's own `pxr`, so render prims resolve exactly as husk sees them (same USD version, file format plugins and asset resolvers). It submits the same `HuskStandalone` plugin jobs, so the Deadline plugin setup above still applies, and it can be used alongside the Monitor submitter.
+
+### Installation
+1. Copy `houdini/husk_submitter.json` to a Houdini packages directory (e.g. `$HOUDINI_USER_PREF_DIR/packages`).
+2. Edit `HUSK_SUBMITTER` in the copied file to point at this repository.
+3. `deadlinecommand` must be found via `DEADLINE_PATH`, the macOS `/Users/Shared/Thinkbox/DEADLINE_PATH` file or `PATH`. This is the case on machines with the Deadline client installed.
+
+### Usage
+Add the **Husk Submitter** shelf, then click **Submit Husk**, or run from the Python shell:
+
+```python
+from husk_submitter import ui
+ui.show()
+```
+
+Clicking **Submit...** parses the USD files and lists the jobs to be submitted with their outputs. Output paths written by more than one job are highlighted.
+
+### Differences from the Monitor submitter
+- Pass/Settings patterns use `*` wildcards against prim names, paths below `/Render` or absolute paths. A pattern that matches nothing is reported instead of silently falling back to the default settings.
+- Job names are unique: prims sharing a name are labelled by their path below `/Render`, and duplicate file names get a numeric suffix.
+- The Houdini version is written to the job's plugin info. Husk executable paths in **Configure Plugin** may contain `XX.X.XXX`, which is replaced by that version to pick the matching husk, e.g. `/opt/hfsXX.X.XXX/bin/husk`. Keep at least one concrete path in the list, as the Monitor submitter uses it to find `usdcat`.
+
+### Development
+The submitter core (`python/husk_submitter`: `render_info`, `jobs`, `deadline`, `options`) only depends on `pxr` and runs outside Houdini. Tests use [uv](https://docs.astral.sh/uv/) with `usd-core`:
+
+```
+uv run pytest
+uv sync --group ui && uv run pytest   # also run the dialog tests (PySide6)
+```
+
+The husk arguments are defined once in `python/husk_submitter/options.py`. After changing them, regenerate the plugin options file:
+
+`PYTHONPATH=python uv run python -m husk_submitter.options HuskStandalone/HuskStandalone.options`
+
 ## Notes
 ### Submission
 Submission is mostly straightforward. Select your usd files, set the settings you want to override and click submit.

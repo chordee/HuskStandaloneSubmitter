@@ -100,9 +100,11 @@ def submit_job(
 		write_info_file(plugin_file, plugin_info(job, houdini_version))
 
 		try:
+			# CREATE_NO_WINDOW only exists on Windows, where it avoids a console popping up
 			process = subprocess.run(
 				[str(deadlinecommand), str(job_file), str(plugin_file)],
-				capture_output=True, text=True, check=False)
+				capture_output=True, text=True, check=False,
+				creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
 		except OSError as error:
 			raise DeadlineError(f'Failed to run {deadlinecommand}: {error}') from error
 
