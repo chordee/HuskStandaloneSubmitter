@@ -7,7 +7,7 @@ import pytest
 from conftest import make_stage
 from husk_submitter.jobs import (
 	JobOptions, SubmissionError, determine_outputs, expand_output_tokens,
-	find_output_collisions, group_prim_submissions, match_prims, plan_jobs)
+	find_output_collisions, group_prim_submissions, match_prims, plan_jobs, set_outputs)
 from husk_submitter.render_info import read_render_info
 
 PRIMS = ['/Render/pass_fg', '/Render/pass_bg', '/Render/sub/pass_fg2', '/Render/final']
@@ -134,3 +134,24 @@ def test_output_collisions(shot_usd: Path) -> None:
 
 	assert find_output_collisions(plan_jobs([shot_usd], shared)[0]) == ['/o/shot_v001.$F4.exr']
 	assert find_output_collisions(plan_jobs([shot_usd], unique)[0]) == []
+
+
+def test_output_overrides_per_file(shot_usd: Path, tmp_path: Path) -> None:
+	other = tmp_path / 'other.usda'
+	other.write_text(shot_usd.read_text())
+	options = JobOptions(output_override='/shared/{usd}.$F4.exr')
+
+	jobs, _ = plan_jobs([shot_usd, other], options, {other: '/other/{usd}.$F4.exr'})
+
+	assert [job.outputs for job in jobs] == [['/shared/shot_v001.$F4.exr'], ['/other/other.$F4.exr']]
+	assert options.output_override == '/shared/{usd}.$F4.exr'
+
+
+def test_set_outputs_expands_tokens(shot_usd: Path) -> None:
+	job = plan_jobs([shot_usd], JobOptions(pass_pattern='pass_fg'))[0][0]
+
+	set_outputs(job, ' /o/{usd}/{pass}.$F4.exr , /o/depth.$F4.exr,')
+
+	assert job.outputs == ['/o/shot_v001/pass_fg.$F4.exr', '/o/depth.$F4.exr']
+	assert job.plugin_info['--output'] == '/o/shot_v001/pass_fg.$F4.exr,/o/depth.$F4.exr'
+	assert job.plugin_info['override_--output'] == 'True'

@@ -14,7 +14,7 @@ from pathlib import Path
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .deadline import DeadlineError, SubmitResult, find_deadlinecommand, submit_job
-from .jobs import Job, JobOptions, find_output_collisions, plan_jobs
+from .jobs import Job, JobOptions, find_output_collisions, plan_jobs, set_outputs
 from .options import GROUPS, HOUDINI_VERSIONS, OPTIONS, USD_FILE_FILTER, HuskOption, Kind
 
 logger = logging.getLogger(__name__)
@@ -22,6 +22,14 @@ logger = logging.getLogger(__name__)
 WINDOW_TITLE = 'Husk Deadline Submitter'
 PER_JOB_FLAGS = ('--pass', '--settings', '--output')
 COLLISION_COLOR = QtGui.QColor('#e06c6c')
+USD_OUTPUT_TOOLTIP = (
+	'Double-click to set Output/s for this file only, replacing the shared Output/s.\n'
+	'Comma separated, one path per RenderProduct in order.\n'
+	'{usd}, {pass} and {settings} are expanded per job. Leave blank to use the shared setting.')
+OUTPUTS_COLUMN = 2
+OUTPUTS_TOOLTIP = (
+	'Double-click to edit. Comma separated, one path per RenderProduct in order.\n'
+	'{usd}, {pass} and {settings} are expanded for the job.')
 FRAME_LIMIT = 65535
 
 _dialog: SubmitterDialog | None = None  # keeps the non-modal dialog alive
@@ -160,10 +168,17 @@ class SubmitterDialog(QtWidgets.QDialog):
 		group = QtWidgets.QGroupBox('Submission')
 		form = QtWidgets.QFormLayout(group)
 
-		self.usd_list = QtWidgets.QListWidget()
-		self.usd_list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
-		self.usd_list.setToolTip('USD files to submit. Each file is submitted as one or more jobs.')
-		form.addRow('USD File/s', self.usd_list)
+		self.usd_table = QtWidgets.QTableWidget(0, 2)
+		self.usd_table.setHorizontalHeaderLabels(['USD File', 'Output Override'])
+		self.usd_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+		self.usd_table.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+		self.usd_table.setEditTriggers(QtWidgets.QAbstractItemView.DoubleClicked | QtWidgets.QAbstractItemView.EditKeyPressed)
+		self.usd_table.verticalHeader().hide()
+		header = self.usd_table.horizontalHeader()
+		header.setSectionResizeMode(0, QtWidgets.QHeaderView.Interactive)
+		header.setStretchLastSection(True)
+		self.usd_table.setToolTip('USD files to submit. Each file is submitted as one or more jobs.')
+		form.addRow('USD File/s', self.usd_table)
 		form.addRow('', self._build_usd_buttons())
 
 		self.batch_name = QtWidgets.QLineEdit()
@@ -242,11 +257,35 @@ class SubmitterDialog(QtWidgets.QDialog):
 		return layout
 
 	def usd_paths(self) -> list[str]:
-		return [self.usd_list.item(index).text() for index in range(self.usd_list.count())]
+		return [self.usd_table.item(row, 0).text() for row in range(self.usd_table.rowCount())]
+
+	def output_overrides(self) -> dict[Path, str]:
+		'''
+		Output overrides entered for individual USD files.
+		'''
+		overrides = {}
+		for row in range(self.usd_table.rowCount()):
+			output = self.usd_table.item(row, 1).text().strip()
+			if output:
+				overrides[Path(self.usd_table.item(row, 0).text())] = output
+		return overrides
 
 	def add_usd_paths(self, paths: list[str]) -> None:
 		existing = set(self.usd_paths())
-		self.usd_list.addItems([path for path in paths if path not in existing])
+		for path in paths:
+			if path in existing:
+				continue
+			existing.add(path)
+			row = self.usd_table.rowCount()
+			self.usd_table.insertRow(row)
+			path_item = QtWidgets.QTableWidgetItem(path)
+			path_item.setFlags(path_item.flags() & ~QtCore.Qt.ItemIsEditable)
+			path_item.setToolTip(path)
+			output_item = QtWidgets.QTableWidgetItem()
+			output_item.setToolTip(USD_OUTPUT_TOOLTIP)
+			self.usd_table.setItem(row, 0, path_item)
+			self.usd_table.setItem(row, 1, output_item)
+		self.usd_table.resizeColumnToContents(0)
 		self._update_batch_name()
 
 	def _browse_usd(self) -> None:
@@ -258,12 +297,12 @@ class SubmitterDialog(QtWidgets.QDialog):
 			self.add_usd_paths(paths)
 
 	def _remove_selected(self) -> None:
-		for item in self.usd_list.selectedItems():
-			self.usd_list.takeItem(self.usd_list.row(item))
+		for row in sorted({index.row() for index in self.usd_table.selectedIndexes()}, reverse=True):
+			self.usd_table.removeRow(row)
 		self._update_batch_name()
 
 	def _clear_usd(self) -> None:
-		self.usd_list.clear()
+		self.usd_table.setRowCount(0)
 		self._update_batch_name()
 
 	def _update_batch_name(self) -> None:
@@ -303,7 +342,8 @@ class SubmitterDialog(QtWidgets.QDialog):
 
 		QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
 		try:
-			jobs, failures = plan_jobs([Path(path) for path in self.usd_paths()], self.job_options())
+			jobs, failures = plan_jobs(
+				[Path(path) for path in self.usd_paths()], self.job_options(), self.output_overrides())
 		finally:
 			QtWidgets.QApplication.restoreOverrideCursor()
 
@@ -346,22 +386,26 @@ class SubmitterDialog(QtWidgets.QDialog):
 
 class JobPreviewDialog(QtWidgets.QDialog):
 	'''
-	Lists the jobs about to be submitted and flags output paths shared by several jobs.
+	Lists the jobs about to be submitted. Outputs can be edited per job and
+	output paths shared by several jobs are flagged. Edits are applied to the jobs.
 	'''
 
 	def __init__(self, jobs: list[Job], failures: dict[str, str], parent: QtWidgets.QWidget | None = None) -> None:
 		super().__init__(parent)
 		self.setWindowTitle(f'{WINDOW_TITLE} - Review Jobs')
 		self.resize(900, 400)
-		collisions = set(find_output_collisions(jobs))
+		self.jobs = jobs
 		layout = QtWidgets.QVBoxLayout(self)
 
-		for message in self._messages(failures, collisions):
-			label = QtWidgets.QLabel(message)
-			label.setWordWrap(True)
-			label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
-			layout.addWidget(label)
-		layout.addWidget(self._build_table(jobs, collisions))
+		for path, error in failures.items():
+			layout.addWidget(self._label(f'Skipped {path}:\n    {error}'))
+		self.collision_label = self._label(
+			'Highlighted outputs are written by more than one job. Edit them below '
+			'or use {usd}, {pass} or {settings} in Output/s to make them unique.')
+		layout.addWidget(self.collision_label)
+		self.table = self._build_table(jobs)
+		self.table.itemChanged.connect(self._output_edited)
+		layout.addWidget(self.table)
 
 		buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Cancel)
 		submit = buttons.addButton(f'Submit {len(jobs)} Job/s', QtWidgets.QDialogButtonBox.AcceptRole)
@@ -369,33 +413,49 @@ class JobPreviewDialog(QtWidgets.QDialog):
 		buttons.accepted.connect(self.accept)
 		buttons.rejected.connect(self.reject)
 		layout.addWidget(buttons)
+		self._refresh_outputs()
 
 	@staticmethod
-	def _messages(failures: dict[str, str], collisions: set[str]) -> list[str]:
-		messages = [f'Skipped {path}:\n    {error}' for path, error in failures.items()]
-		if collisions:
-			messages.append(
-				'Highlighted outputs are written by more than one job. '
-				'Use {usd}, {pass} or {settings} in Output/s to make them unique.')
-		return messages
+	def _label(text: str) -> QtWidgets.QLabel:
+		label = QtWidgets.QLabel(text)
+		label.setWordWrap(True)
+		label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+		return label
 
 	@staticmethod
-	def _build_table(jobs: list[Job], collisions: set[str]) -> QtWidgets.QTableWidget:
+	def _build_table(jobs: list[Job]) -> QtWidgets.QTableWidget:
 		table = QtWidgets.QTableWidget(len(jobs), 3)
 		table.setHorizontalHeaderLabels(['Job', 'Frames', 'Outputs'])
-		table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+		table.setEditTriggers(QtWidgets.QAbstractItemView.DoubleClicked | QtWidgets.QAbstractItemView.EditKeyPressed)
 		table.horizontalHeader().setStretchLastSection(True)
 		for row, job in enumerate(jobs):
-			outputs = QtWidgets.QTableWidgetItem('\n'.join(job.outputs))
-			if collisions.intersection(job.outputs):
-				outputs.setForeground(COLLISION_COLOR)
-				outputs.setToolTip('\n'.join(sorted(collisions.intersection(job.outputs))))
-			table.setItem(row, 0, QtWidgets.QTableWidgetItem(job.name))
-			table.setItem(row, 1, QtWidgets.QTableWidgetItem(job.frames))
-			table.setItem(row, 2, outputs)
-		table.resizeColumnsToContents()
-		table.resizeRowsToContents()
+			for column, text in enumerate((job.name, job.frames)):
+				item = QtWidgets.QTableWidgetItem(text)
+				item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+				table.setItem(row, column, item)
+			table.setItem(row, OUTPUTS_COLUMN, QtWidgets.QTableWidgetItem())
 		return table
+
+	def _output_edited(self, item: QtWidgets.QTableWidgetItem) -> None:
+		if item.column() == OUTPUTS_COLUMN:
+			set_outputs(self.jobs[item.row()], item.text())
+			self._refresh_outputs()
+
+	def _refresh_outputs(self) -> None:
+		'''
+		Show each job's outputs with tokens expanded and highlight shared ones.
+		'''
+		collisions = set(find_output_collisions(self.jobs))
+		self.table.blockSignals(True)
+		for row, job in enumerate(self.jobs):
+			item = self.table.item(row, OUTPUTS_COLUMN)
+			shared = sorted(collisions.intersection(job.outputs))
+			item.setText(', '.join(job.outputs))
+			item.setForeground(COLLISION_COLOR if shared else self.table.palette().text().color())
+			item.setToolTip('\n'.join([OUTPUTS_TOOLTIP, *shared]))
+		self.table.blockSignals(False)
+		self.collision_label.setVisible(bool(collisions))
+		self.table.resizeColumnsToContents()
 
 
 def show_results(parent: QtWidgets.QWidget, results: list[SubmitResult], failures: dict[str, str]) -> None:

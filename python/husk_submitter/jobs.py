@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Iterable
@@ -151,6 +151,17 @@ def expand_output_tokens(path: str, usd_path: Path, pass_prim: str, settings_pri
 	return re.sub(r'(?<=.)[\\/]{2,}', '/', expanded)
 
 
+def set_outputs(job: Job, outputs: str) -> None:
+	'''
+	Replace a job's outputs with a comma separated list of paths,
+	expanding {usd}, {pass} and {settings}.
+	'''
+	job.outputs = [
+		expand_output_tokens(path.strip(), job.usd_path, job.pass_prim, job.settings_prims)
+		for path in outputs.split(',') if path.strip()]
+	job.plugin_info['--output'] = ','.join(job.outputs)
+
+
 def _prim_name(prim_path: str) -> str:
 	return prim_path.rsplit('/', 1)[-1]
 
@@ -242,19 +253,26 @@ def find_output_collisions(jobs: list[Job]) -> list[str]:
 	return [output for output, count in counts.items() if count > 1]
 
 
-def plan_jobs(usd_paths: Iterable[Path], options: JobOptions) -> tuple[list[Job], dict[str, str]]:
+def plan_jobs(
+		usd_paths: Iterable[Path], options: JobOptions,
+		output_overrides: dict[Path, str] | None = None) -> tuple[list[Job], dict[str, str]]:
 	'''
 	Build uniquely named jobs for every USD file.
+	output_overrides replaces options.output_override for the given files.
 	Returns the jobs and a mapping of USD path -> error for files that failed.
 	'''
+	output_overrides = output_overrides or {}
 	jobs: list[Job] = []
 	failures: dict[str, str] = {}
 	for usd_path in usd_paths:
 		if not usd_path.is_file():
 			failures[str(usd_path)] = "USD file doesn't exist"
 			continue
+		file_options = options
+		if output_overrides.get(usd_path):
+			file_options = replace(options, output_override=output_overrides[usd_path])
 		try:
-			jobs += build_jobs(read_render_info(usd_path, options.render_root), options)
+			jobs += build_jobs(read_render_info(usd_path, options.render_root), file_options)
 		except (RenderInfoError, SubmissionError) as error:
 			failures[str(usd_path)] = str(error)
 

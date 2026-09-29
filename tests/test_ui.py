@@ -11,6 +11,7 @@ import pytest
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 QtWidgets = pytest.importorskip('PySide6.QtWidgets', exc_type=ImportError)
+from PySide6 import QtCore  # noqa: E402
 
 from husk_submitter import ui  # noqa: E402
 from husk_submitter.deadline import SubmitResult  # noqa: E402
@@ -84,6 +85,30 @@ def test_submit_flow(dialog: ui.SubmitterDialog, monkeypatch: pytest.MonkeyPatch
 	assert len(shown[0][0]) == 2 and shown[0][1] == {}
 
 
+def test_output_override_per_usd_file(dialog: ui.SubmitterDialog, shot_usd: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+	other = tmp_path / 'other.usda'
+	other.write_text(shot_usd.read_text())
+	dialog.add_usd_paths([str(other), str(shot_usd)])
+	dialog.usd_table.item(1, 1).setText(' /other/{usd}.$F4.exr ')
+	submitted = []
+	monkeypatch.setattr(ui.JobPreviewDialog, 'exec', lambda self: QtWidgets.QDialog.Accepted)
+	monkeypatch.setattr(ui, 'find_deadlinecommand', lambda: Path('deadlinecommand'))
+	monkeypatch.setattr(ui, 'submit_job', lambda job, *a, **k: submitted.append(job) or SubmitResult(job, True, 'id', ''))
+	monkeypatch.setattr(ui, 'show_results', lambda *args: None)
+
+	dialog.submit()
+
+	assert dialog.usd_paths() == [str(shot_usd), str(other)]
+	assert dialog.output_overrides() == {other: '/other/{usd}.$F4.exr'}
+	assert [job.outputs for job in submitted] == [['/out/beauty.%04d.exr', '/out/depth.%04d.exr'], ['/other/other.$F4.exr']]
+
+	dialog.usd_table.selectRow(0)
+	dialog._remove_selected()
+	assert dialog.usd_paths() == [str(other)]
+	dialog._clear_usd()
+	assert dialog.usd_paths() == []
+
+
 def test_running_houdini_version_is_used(app: QtWidgets.QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
 	monkeypatch.setattr(ui, 'houdini_version', lambda: '21.0.729')
 	dialog = ui.SubmitterDialog()
@@ -105,3 +130,20 @@ def test_preview_flags_collisions(app: QtWidgets.QApplication, shot_usd: Path) -
 	assert table.rowCount() == 2
 	assert table.item(0, 2).foreground().color() == ui.COLLISION_COLOR
 	assert any('Skipped /missing.usd' in label.text() for label in preview.findChildren(QtWidgets.QLabel))
+
+
+def test_preview_edits_outputs_per_job(app: QtWidgets.QApplication, shot_usd: Path) -> None:
+	from husk_submitter.jobs import JobOptions, plan_jobs
+	jobs, _ = plan_jobs([shot_usd], JobOptions(pass_pattern='pass_*', output_override='/o/{usd}.exr'))
+	preview = ui.JobPreviewDialog(jobs, {})
+	assert not preview.collision_label.isHidden()
+
+	preview.table.item(1, ui.OUTPUTS_COLUMN).setText('/o/{pass}/beauty.$F4.exr, /o/{pass}/depth.$F4.exr')
+
+	assert jobs[1].outputs == ['/o/pass_bg/beauty.$F4.exr', '/o/pass_bg/depth.$F4.exr']
+	assert jobs[1].plugin_info['--output'] == '/o/pass_bg/beauty.$F4.exr,/o/pass_bg/depth.$F4.exr'
+	assert jobs[0].outputs == ['/o/shot_v001.exr']
+	assert preview.table.item(1, ui.OUTPUTS_COLUMN).text() == '/o/pass_bg/beauty.$F4.exr, /o/pass_bg/depth.$F4.exr'
+	assert preview.table.item(0, ui.OUTPUTS_COLUMN).foreground().color() != ui.COLLISION_COLOR
+	assert preview.collision_label.isHidden()
+	assert not preview.table.item(0, 0).flags() & QtCore.Qt.ItemIsEditable
