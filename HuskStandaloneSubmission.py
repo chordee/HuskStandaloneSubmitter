@@ -2,6 +2,7 @@ import os
 import pathlib
 import subprocess
 import re
+from collections import Counter
 from enum import Enum
 from functools import partial
 from dataclasses import dataclass, field
@@ -125,6 +126,8 @@ def files_selected(dialog: DeadlineScriptDialog):
 USDCAT = get_usdcat()
 WINDOW_TITLE = 'Deadline Husk Submitter'
 MAX_COLUMNS = 6
+MAX_LISTED_COLLISIONS = 5
+OUTPUT_TOKEN_PATTERN = re.compile(r'\{(usd|pass|settings)\}')
 CONTROLS = {  # End key with _,+ or - for group, expanded group or collapsed group
 	'Submission_': [
 		[Control(
@@ -271,7 +274,9 @@ CONTROLS = {  # End key with _,+ or - for group, expanded group or collapsed gro
 			tooltip = (
 				"Comma separated list of output image file paths.\n"
 				"These can contain certain local variables:\n"
-				"eg. $F/<F>/%d, $F4/<F4>/%04d, $FF/<FF>/%g"))],
+				"eg. $F/<F>/%d, $F4/<F4>/%04d, $FF/<FF>/%g\n"
+				"Submitter tokens expanded per job:\n"
+				"{usd} USD file name, {pass} RenderPass name, {settings} RenderSettings name"))],
 	],
 
 	'USD-': [
@@ -668,6 +673,25 @@ def group_prim_submissions(
 	return prim_submissions
 
 
+def expand_output_tokens(path: str, usd_file_path: str, pass_prim: str, settings_prims: list[str]) -> str:
+	'''
+	Expand submitter tokens in an output path.
+	Husk variables such as $F4 and <F4> are left for husk to expand.
+
+	{usd}: USD file name without extension
+	{pass}: RenderPass prim name, empty when no pass is used
+	{settings}: RenderSettings prim name, the first one when a job renders multiple
+	'''
+	tokens = {
+		'usd': os.path.splitext(os.path.basename(usd_file_path))[0],
+		'pass': os.path.basename(pass_prim),
+		'settings': os.path.basename(settings_prims[0]) if settings_prims else '',
+	}
+	expanded = OUTPUT_TOKEN_PATTERN.sub(lambda match: tokens[match.group(1)], path)
+	# Collapse separators doubled by empty tokens, keeping a leading UNC prefix
+	return re.sub(r'(?<=.)[\\/]{2,}', '/', expanded)
+
+
 def build_jobs(dialog: DeadlineScriptDialog, usd_file_path: str, arguments: dict) -> list[JobSubmission]:
 	'''
 	Parse the USD file and build the jobs to submit for it.
@@ -695,6 +719,9 @@ def build_jobs(dialog: DeadlineScriptDialog, usd_file_path: str, arguments: dict
 		job_arguments['--pass'] = pass_prim
 		job_arguments['override_--settings'] = True
 		job_arguments['--settings'] = ','.join(settings_prims)
+		productnames = [
+			expand_output_tokens(pn, usd_file_path, pass_prim, settings_prims)
+			for pn in productnames]
 		job_arguments['override_--output'] = True
 		job_arguments['--output'] = ','.join(productnames)
 		job_arguments['--usd-input'] = usd_file_path
@@ -775,12 +802,15 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 			continue
 		jobs.extend(build_jobs(dialog, usd_file_path, arguments))
 
-	# Overridden outputs are shared by every job, so they would overwrite each other
-	if arguments['override_--output'] and len(jobs) > 1:
+	# Warn when multiple jobs would write to the same output files
+	output_counts = Counter(pn for job in jobs for pn in set(job.productnames))
+	collisions = [pn for pn, count in output_counts.items() if count > 1]
+	if collisions:
 		answer = dialog.ShowMessageBox(
-			'Output/s is overridden but multiple render jobs will be submitted\n'
-			'(multiple USD files, passes or Separate Jobs settings).\n'
-			'Every job will write to the same output files.\n\n'
+			'Multiple render jobs will write to the same output files:\n'
+			+ '\n'.join(collisions[:MAX_LISTED_COLLISIONS])
+			+ ('\n...' if len(collisions) > MAX_LISTED_COLLISIONS else '')
+			+ '\n\nUse {usd}, {pass} or {settings} in Output/s to make them unique.\n'
 			'Continue submitting?',
 			'Warning', ('Yes', 'No'))
 		if answer != 'Yes':
