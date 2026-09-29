@@ -1,0 +1,7 @@
+{
+    "env": [
+        {"HUSK_SUBMITTER": "/path/to/HuskStandaloneSubmitter"},
+        {"PYTHONPATH": {"value": "$HUSK_SUBMITTER/python", "method": "prepend"}}
+    ],
+    "path": "$HUSK_SUBMITTER/houdini"
+}

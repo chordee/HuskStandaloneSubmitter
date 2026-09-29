@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<shelfDocument>
+  <toolshelf name="husk_submitter" label="Husk Submitter">
+    <memberTool name="husk_submitter_open"/>
+  </toolshelf>
+
+  <tool name="husk_submitter_open" label="Submit Husk" icon="ROP_usdrender">
+    <helpText><![CDATA[Submit USD files to Deadline as HuskStandalone jobs.]]></helpText>
+    <script scriptType="python"><![CDATA[from husk_submitter import ui
+ui.show()]]></script>
+  </tool>
+</shelfDocument>

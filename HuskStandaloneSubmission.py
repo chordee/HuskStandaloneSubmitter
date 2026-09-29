@@ -63,15 +63,16 @@ class JobSubmission:
 	arguments: dict = field(default_factory=dict)
 
 
-def get_usdcat() -> str:
+def get_usdcat(version: str) -> str:
 	'''
-	Sets the USDCAT variable to the usdcat executable based on the husk executable.
+	Returns the usdcat executable next to the husk executable of the Houdini version.
 	'''
 	husk_settings = RepositoryUtils.GetPluginConfig('HuskStandalone')
-	executable_list = husk_settings.GetConfigEntry('USD_RenderExecutable')
+	config_key = f'Houdini{version.replace(".", "_")}_Husk_Executable'
+	executable_list = husk_settings.GetConfigEntryWithDefault(config_key, '')
 	executable = FileUtils.SearchFileList(executable_list)
 	if not executable:
-		raise Exception("Husk executable not found.")
+		raise Exception(f"Husk executable for Houdini {version} not found.\nSet {config_key} in Configure Plugin.")
 
 	husk = pathlib.Path(executable)
 	usdcat = husk.with_name('usdcat' + husk.suffix)
@@ -123,7 +124,7 @@ def files_selected(dialog: DeadlineScriptDialog):
 
 
 # Define UI
-USDCAT = get_usdcat()
+HOUDINI_VERSIONS = ['21.0', '22.0']
 WINDOW_TITLE = 'Deadline Husk Submitter'
 MAX_COLUMNS = 6
 MAX_LISTED_COLLISIONS = 5
@@ -152,6 +153,14 @@ CONTROLS = {  # End key with _,+ or - for group, expanded group or collapsed gro
 			type = ControlType.text,
 			value = [''],
 			tooltip = "A comment for the job to display in the Monitor")],
+		[Control(
+			name = 'version_control',
+			label = 'Houdini Version',
+			type = ControlType.combo,
+			value = [HOUDINI_VERSIONS[0], HOUDINI_VERSIONS],
+			tooltip = (
+				"Houdini version of the husk executable used to render,\n"
+				"as set in Configure Plugin > HuskStandalone."))],
 		[Control(
 			name = 'chunk_control',
 			label = 'Frames Per Task',
@@ -311,7 +320,7 @@ CONTROLS = {  # End key with _,+ or - for group, expanded group or collapsed gro
 			type = ControlType.checkbox,
 			value = [False, 'Disable Motion Blur'],
 			tooltip = (
-				"Disable all lights in the scene.\n"
+				"Disable motion blur in the scene.\n"
 				"This option applies to all render delegates."))],
 	],
 }
@@ -402,7 +411,7 @@ def generate_options_file() -> None:
 	writer.Close()
 
 
-def get_render_info(path: str) -> RenderInfo:
+def get_render_info(path: str, usdcat_executable: str) -> RenderInfo:
 	'''
 	Returns a RenderInfo dataclass representing relevant layer metadata
 	and all of the render prims and their relationships.
@@ -418,7 +427,7 @@ def get_render_info(path: str) -> RenderInfo:
 
 	# CREATE_NO_WINDOW only exists on Windows
 	creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
-	usdcat = subprocess.check_output([USDCAT, '--flatten', '--mask', '/Render', path], text=True, creationflags=creationflags)
+	usdcat = subprocess.check_output([usdcat_executable, '--flatten', '--mask', '/Render', path], text=True, creationflags=creationflags)
 	finished_metadata = False
 	resume = []
 	for line in usdcat.splitlines():
@@ -692,11 +701,11 @@ def expand_output_tokens(path: str, usd_file_path: str, pass_prim: str, settings
 	return re.sub(r'(?<=.)[\\/]{2,}', '/', expanded)
 
 
-def build_jobs(dialog: DeadlineScriptDialog, usd_file_path: str, arguments: dict) -> list[JobSubmission]:
+def build_jobs(dialog: DeadlineScriptDialog, usd_file_path: str, arguments: dict, usdcat_executable: str) -> list[JobSubmission]:
 	'''
 	Parse the USD file and build the jobs to submit for it.
 	'''
-	render_info: RenderInfo = get_render_info(usd_file_path)
+	render_info: RenderInfo = get_render_info(usd_file_path, usdcat_executable)
 	separate_jobs = dialog.GetValue('separate_jobs')
 
 	if dialog.GetValue('override_framerange_control'):
@@ -741,7 +750,7 @@ def build_jobs(dialog: DeadlineScriptDialog, usd_file_path: str, arguments: dict
 	return jobs
 
 
-def submit_job(job: JobSubmission, batch_name: str, comment: str, chunk_size: int) -> str:
+def submit_job(job: JobSubmission, batch_name: str, comment: str, chunk_size: int, version: str) -> str:
 	'''
 	Write the job and plugin info files and submit them to Deadline.
 	Returns the deadlinecommand output.
@@ -766,6 +775,7 @@ def submit_job(job: JobSubmission, batch_name: str, comment: str, chunk_size: in
 	writer.WriteLine( f'ArgumentList={";".join(job.arguments.keys())}')
 	for argument, value in job.arguments.items():
 		writer.WriteLine( f'{argument}={value}' )
+	writer.WriteLine( f'Version={version}' )
 	writer.Close()
 
 	# Setup the command line arguments.
@@ -791,6 +801,13 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 		dialog.ShowMessageBox( "End Frame must be higher than Start Frame", "Error" )
 		return
 
+	version = dialog.GetValue('version_control')
+	try:
+		usdcat_executable = get_usdcat(version)
+	except Exception as error:
+		dialog.ShowMessageBox(str(error), 'Error')
+		return
+
 	arguments = get_argument_values(dialog)
 
 	# Build every job up front so nothing is submitted if the user cancels
@@ -803,7 +820,7 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 			continue
 		# A usdcat failure on one file should not abort the whole submission
 		try:
-			jobs.extend(build_jobs(dialog, usd_file_path, arguments))
+			jobs.extend(build_jobs(dialog, usd_file_path, arguments, usdcat_executable))
 		except (subprocess.CalledProcessError, OSError) as error:
 			results['fail'][usd_file_path] = f'Failed to read USD file: {error}'
 
@@ -828,7 +845,7 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 	for job_index, job in enumerate(jobs):
 		# Progress in titlebar
 		dialog.SetTitle(f'{WINDOW_TITLE} - Submitting Job {job_index + 1}/{len(jobs)}')
-		result = submit_job(job, batch_name, comment, chunk_size)
+		result = submit_job(job, batch_name, comment, chunk_size, version)
 		# Key by directory and job name so same-named USD files in different directories stay separate
 		result_key = os.path.join(os.path.dirname(job.arguments['--usd-input']), job.name)
 		results['success' if 'Result=Success' in result else 'fail'][result_key] = result

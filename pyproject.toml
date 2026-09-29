@@ -1,0 +1,19 @@
+[project]
+name = "husk-submitter"
+version = "0.1.0"
+description = "Houdini-side Deadline submitter for the HuskStandalone plugin"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+# Houdini provides pxr at runtime; usd-core is only used to run the tests
+dev = ["pytest", "usd-core"]
+# Houdini 21+ provides PySide6; install to run the UI tests outside Houdini
+ui = ["pyside6-essentials"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["python"]

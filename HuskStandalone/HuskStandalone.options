@@ -256,7 +256,7 @@ Label=Disable Scene Lights
 Category=USD
 CategoryOrder=3
 Index=25
-Description=Disable all lights in the scene.
+Description=Disable motion blur in the scene.
 This option applies to all render delegates.
 DefaultValue=False
 Type=Boolean
