@@ -657,6 +657,8 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 
 	# Iterate through files and submit each USD
 	results = {'success': {}, 'fail': {}}
+	override_output = dialog.GetValue('override_--output')
+	output_collision_confirmed = False
 	for job_index, usd_file_path in enumerate(usd_file_paths):
 		if not os.path.exists(usd_file_path):
 			dialog.ShowMessageBox( "USD file doesn't exist!\n" + usd_file_path, 'Error' )
@@ -687,7 +689,21 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 			else:
 				for settings_prim, productnames in pass_settings_dict.items():
 					prim_submissions.append((pass_prim, [settings_prim], productnames))
-		
+
+		# Overridden outputs are shared by every job, so they would overwrite each other.
+		# Always triggers before the first submission, so cancelling submits nothing.
+		multiple_jobs = len(usd_file_paths) > 1 or len(prim_submissions) > 1
+		if override_output and multiple_jobs and not output_collision_confirmed:
+			answer = dialog.ShowMessageBox(
+				'Output/s is overridden but multiple render jobs will be submitted\n'
+				'(multiple USD files, passes or Separate Jobs settings).\n'
+				'Every job will write to the same output files.\n\n'
+				'Continue submitting?',
+				'Warning', ('Yes', 'No'))
+			if answer != 'Yes':
+				return
+			output_collision_confirmed = True
+
 		for pass_prim, settings_prims, productnames in prim_submissions:
 			pass_arguments = arguments.copy()
 			if pass_prim == '':
