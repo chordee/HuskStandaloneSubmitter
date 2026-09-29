@@ -16,11 +16,20 @@ Index=0
 Default=True
 Description=Not configurable
 
-[USD_RenderExecutable]
+[Houdini21_0_Husk_Executable]
 Type=multilinemultifilename
 Category=Render Executables
 CategoryOrder=0
 Index=0
-Label=HUSK Executable
-Description=The path to the husk executable file used for rendering. Enter alternative paths on separate lines.
-Default=C:\Program Files\Side Effects Software\Houdini 18.5.596\bin\husk.exe
+Label=Houdini 21.0 Husk Executable
+Description=The path to the Houdini 21.0 husk executable. Enter alternative paths on separate lines.
+Default=C:\Program Files\Side Effects Software\Houdini 21.0.000\bin\husk.exe;/Applications/Houdini/Houdini21.0.000/Frameworks/Houdini.framework/Versions/21.0.000/Resources/bin/husk;/opt/hfs21.0/bin/husk
+
+[Houdini22_0_Husk_Executable]
+Type=multilinemultifilename
+Category=Render Executables
+CategoryOrder=0
+Index=1
+Label=Houdini 22.0 Husk Executable
+Description=The path to the Houdini 22.0 husk executable. Enter alternative paths on separate lines.
+Default=C:\Program Files\Side Effects Software\Houdini 22.0.000\bin\husk.exe;/Applications/Houdini/Houdini22.0.000/Frameworks/Houdini.framework/Versions/22.0.000/Resources/bin/husk;/opt/hfs22.0/bin/husk

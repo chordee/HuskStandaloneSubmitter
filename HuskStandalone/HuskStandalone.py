@@ -38,13 +38,15 @@ class HuskStandalone(DeadlinePlugin):
 
 
 	def RenderExecutable(self):
-		# get path to the executable
-		#if we know submitter's Hou version we could eventualy use it
+		# Version is major.minor[.build], eg. 21.0.440 -> Houdini21_0_Husk_Executable
 		version = self.GetPluginInfoEntryWithDefault( 'Version', '' )
-		path_list = self.GetConfigEntry('USD_RenderExecutable').replace('XX.X.XXX', version)
+		if not version:
+			self.FailRender('No Houdini Version in the plugin info.')
+		config_key = 'Houdini{}_Husk_Executable'.format('_'.join(version.split('.')[:2]))
+		path_list = self.GetConfigEntryWithDefault(config_key, '')
 		executable_path = FileUtils.SearchFileList(path_list)
-		if version == '' or not executable_path:
-			self.LogInfo('Failed to find executable:\nconfig:{}\nVersion:{}\n'.format(path_list, version))
+		if not executable_path:
+			self.FailRender('Failed to find the husk executable for Houdini {} in {}:\n{}'.format(version, config_key, path_list))
 		return executable_path
 
 
