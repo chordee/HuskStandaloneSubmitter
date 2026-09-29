@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-import os
-
 from Deadline.Plugins import DeadlinePlugin
 from Deadline.Scripting import FileUtils, RepositoryUtils
 
@@ -128,13 +126,13 @@ class HuskStandalone(DeadlinePlugin):
 		VAR_STRING_TEMPLATE = "KARMA_XPU_DISABLE_DEVICE_{}"
 
 		selected_GPUs = list(self.GpuAffinity())
-		print("Setting Karma GPUs", selected_GPUs)
+		self.LogInfo(f"Setting Karma GPUs {selected_GPUs}")
 
 		for gpu in range(MAX_GPUS):
 			if gpu in selected_GPUs:
 				continue
 
-			os.environ[VAR_STRING_TEMPLATE.format(gpu)] = "1"
+			self.SetProcessEnvironmentVariable(VAR_STRING_TEMPLATE.format(gpu), "1")
 
 
 	def RedshiftGPUAffinity(self):
@@ -142,6 +140,6 @@ class HuskStandalone(DeadlinePlugin):
 		Set which GPUs to use using Redshift Environment Variable
 		'''
 		selected_GPUs = list(self.GpuAffinity())
-		print("Setting Redshift GPUs", selected_GPUs)
-		os.environ['REDSHIFT_GPUDEVICES'] = ','.join([str(x) for x in selected_GPUs])
+		self.LogInfo(f"Setting Redshift GPUs {selected_GPUs}")
+		self.SetProcessEnvironmentVariable('REDSHIFT_GPUDEVICES', ','.join([str(x) for x in selected_GPUs]))
 

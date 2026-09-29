@@ -1,4 +1,5 @@
 import os
+import pathlib
 import subprocess
 import re
 from enum import Enum
@@ -63,14 +64,13 @@ def get_usdcat() -> str:
 	if not executable:
 		raise Exception("Husk executable not found.")
 
-	usdcat = executable.split('husk')[0] + 'usdcat'
-	if os.name == 'nt':
-		usdcat += '.exe'
+	husk = pathlib.Path(executable)
+	usdcat = husk.with_name('usdcat' + husk.suffix)
 
-	if not os.path.exists(usdcat):
+	if not usdcat.exists():
 		raise Exception("Houdini usdcat binary not found.")
-	
-	return usdcat
+
+	return str(usdcat)
 
 
 def save_browser_location(path: str) -> None:
@@ -403,7 +403,9 @@ def get_render_info(path: str) -> RenderInfo:
 	accum_path:str = ''
 	accum_depth:int = -1
 
-	usdcat = subprocess.check_output([USDCAT, '--flatten', '--mask', '/Render', path], text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+	# CREATE_NO_WINDOW only exists on Windows
+	creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+	usdcat = subprocess.check_output([USDCAT, '--flatten', '--mask', '/Render', path], text=True, creationflags=creationflags)
 	finished_metadata = False
 	resume = []
 	for line in usdcat.splitlines():
@@ -595,7 +597,7 @@ def determine_outputs(render_info: RenderInfo, pass_value: str, settings_value: 
 		# Next determine associated productnames
 		# Use override productnames if supplied
 		if productnames:
-			result[pass_prim] = (pass_settings, productnames)
+			result[pass_prim] = {pass_setting: productnames for pass_setting in pass_settings}
 			continue
 
 		# Get product names from products from settings
@@ -679,7 +681,8 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 		for pass_prim, pass_settings_dict in outputs.items():
 			if not dialog.GetValue('separate_jobs'):
 				settings_prims = list(pass_settings_dict.keys())
-				productnames = list(set([pn for pn_list in pass_settings_dict.values() for pn in pn_list ]))
+				# Dedupe while preserving order, as --output maps to products by position
+				productnames = list(dict.fromkeys(pn for pn_list in pass_settings_dict.values() for pn in pn_list))
 				prim_submissions.append((pass_prim, settings_prims, productnames))
 			else:
 				for settings_prim, productnames in pass_settings_dict.items():
@@ -700,12 +703,13 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 				job_name_suffix = '_' + os.path.basename(pass_prim)
 			if dialog.GetValue('separate_jobs'):
 				job_name_suffix = '_' + os.path.basename(settings_prims[0])
+			full_job_name = job_name + job_name_suffix
 
 			#Create Job file
 			job_info_filename = Path.Combine( GetDeadlineTempPath(), 'husk_job_info.job' )
 			writer = StreamWriter( job_info_filename, False, Encoding.Unicode )
 			writer.WriteLine( 'Plugin=HuskStandalone' )
-			writer.WriteLine( f'Name={job_name + job_name_suffix}')
+			writer.WriteLine( f'Name={full_job_name}')
 			if batch_name:
 				writer.WriteLine( f'BatchName={batch_name}')
 			writer.WriteLine( f'Comment={comment}')
@@ -734,7 +738,7 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 
 			# Now submit the job.
 			result = ClientUtils.ExecuteCommandAndGetOutput( job_arguments )
-			results['success' if 'Result=Success' in result else 'fail'][job_name] = result
+			results['success' if 'Result=Success' in result else 'fail'][full_job_name] = result
 
 	# Display results/errors
 	dialog.SetTitle(f'{WINDOW_TITLE} - Submission Complete')
