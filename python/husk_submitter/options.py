@@ -55,6 +55,9 @@ class HuskOption:
 		return str(value)
 
 
+# Houdini versions with a Houdini<major>_<minor>_Husk_Executable entry in HuskStandalone.param
+HOUDINI_VERSIONS = ('21.0', '22.0')
+
 USD_INPUT_TOOLTIP = 'Select USD files to submit to Husk.\nSemicolon (;) separated list.'
 USD_FILE_FILTER = 'USD Files (*.usd);;USDA Files (*.usda);;USDC Files(*.usdc);;USDZ Files(*.usdz)'
 

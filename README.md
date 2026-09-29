@@ -39,7 +39,7 @@ Then set the husk executable of each Houdini version under Render Executables (e
 This should be:
 `{Houdini Installation Directory}/bin/husk.exe`
 
-Jobs render with the husk of the Houdini version they were submitted with. To support another version, add a `Houdini<major>_<minor>_Husk_Executable` entry to `HuskStandalone.param` and the version to `HOUDINI_VERSIONS` in `HuskStandaloneSubmission.py`.
+Jobs render with the husk of the Houdini version they were submitted with. To support another version, add a `Houdini<major>_<minor>_Husk_Executable` entry to `HuskStandalone.param` and the version to `HOUDINI_VERSIONS` in `HuskStandaloneSubmission.py` and `python/husk_submitter/options.py`.
 
 ### Version Compatibility
 Houdini 18+
@@ -75,7 +75,7 @@ Clicking **Submit...** parses the USD files and lists the jobs to be submitted w
 ### Differences from the Monitor submitter
 - Pass/Settings patterns use `*` wildcards against prim names, paths below `/Render` or absolute paths. A pattern that matches nothing is reported instead of silently falling back to the default settings.
 - Job names are unique: prims sharing a name are labelled by their path below `/Render`, and duplicate file names get a numeric suffix.
-- The running Houdini's version is written to the job, which selects the matching husk executable in **Configure Plugin**. The Monitor submitter has a **Houdini Version** setting instead.
+- The running Houdini's version is written to the job, which selects the matching husk executable in **Configure Plugin**. Outside Houdini, and in the Monitor submitter, it is chosen with the **Houdini Version** setting.
 
 ### Development
 The submitter core (`python/husk_submitter`: `render_info`, `jobs`, `deadline`, `options`) only depends on `pxr` and runs outside Houdini. Tests use [uv](https://docs.astral.sh/uv/) with `usd-core`:

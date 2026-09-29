@@ -71,15 +71,29 @@ def test_submit_flow(dialog: ui.SubmitterDialog, monkeypatch: pytest.MonkeyPatch
 	submitted, shown = [], []
 	monkeypatch.setattr(ui.JobPreviewDialog, 'exec', lambda self: QtWidgets.QDialog.Accepted)
 	monkeypatch.setattr(ui, 'find_deadlinecommand', lambda: Path('deadlinecommand'))
-	monkeypatch.setattr(ui, 'submit_job', lambda job, *a, **k: submitted.append(job) or SubmitResult(job, True, 'id', ''))
+	monkeypatch.setattr(ui, 'submit_job', lambda job, *a, **k: submitted.append((job, k)) or SubmitResult(job, True, 'id', ''))
 	monkeypatch.setattr(ui, 'show_results', lambda parent, results, failures: shown.append((results, failures)))
 	dialog.rows['--pass'].toggle.setChecked(True)
 	dialog.rows['--pass'].editors[0].setText('pass_*')
+	dialog.version.setCurrentText('22.0')
 
 	dialog.submit()
 
-	assert [job.name for job in submitted] == ['shot_v001.usda_pass_fg', 'shot_v001.usda_pass_bg']
+	assert [job.name for job, _ in submitted] == ['shot_v001.usda_pass_fg', 'shot_v001.usda_pass_bg']
+	assert {kwargs['houdini_version'] for _, kwargs in submitted} == {'22.0'}
 	assert len(shown[0][0]) == 2 and shown[0][1] == {}
+
+
+def test_running_houdini_version_is_used(app: QtWidgets.QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
+	monkeypatch.setattr(ui, 'houdini_version', lambda: '21.0.729')
+	dialog = ui.SubmitterDialog()
+	submitted = []
+	monkeypatch.setattr(ui, 'submit_job', lambda job, *a, **k: submitted.append(k) or SubmitResult(job, True, 'id', ''))
+
+	dialog._submit_one(None, Path('deadlinecommand'))
+
+	assert dialog.version is None
+	assert submitted[0]['houdini_version'] == '21.0.729'
 
 
 def test_preview_flags_collisions(app: QtWidgets.QApplication, shot_usd: Path) -> None:

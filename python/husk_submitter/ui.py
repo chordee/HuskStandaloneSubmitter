@@ -15,7 +15,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from .deadline import DeadlineError, SubmitResult, find_deadlinecommand, submit_job
 from .jobs import Job, JobOptions, find_output_collisions, plan_jobs
-from .options import GROUPS, OPTIONS, USD_FILE_FILTER, HuskOption, Kind
+from .options import GROUPS, HOUDINI_VERSIONS, OPTIONS, USD_FILE_FILTER, HuskOption, Kind
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +147,7 @@ class SubmitterDialog(QtWidgets.QDialog):
 		self.settings = QtCore.QSettings('HuskStandaloneSubmitter', 'HoudiniSubmitter')
 		self.rows = {option.flag: OptionRow(option) for option in OPTIONS}
 		self._batch_edited = False
+		self.running_version = houdini_version()
 
 		layout = QtWidgets.QVBoxLayout(self)
 		layout.addWidget(self._build_submission_group())
@@ -174,6 +175,15 @@ class SubmitterDialog(QtWidgets.QDialog):
 		self.chunk_size.setValue(5)
 		form.addRow('Batch Name', self.batch_name)
 		form.addRow('Comment', self.comment)
+		# Inside Houdini the running version selects husk, standalone it is chosen here
+		self.version = None
+		if not self.running_version:
+			self.version = QtWidgets.QComboBox()
+			self.version.addItems(HOUDINI_VERSIONS)
+			self.version.setToolTip(
+				'Houdini version of the husk executable used to render,\n'
+				'as set in Configure Plugin > HuskStandalone.')
+			form.addRow('Houdini Version', self.version)
 		form.addRow('Frames Per Task', self.chunk_size)
 		form.addRow('Frame Range', self._build_frame_range())
 		return group
@@ -328,7 +338,8 @@ class SubmitterDialog(QtWidgets.QDialog):
 		try:
 			return submit_job(
 				job, command, batch_name=self.batch_name.text().strip(), comment=self.comment.text(),
-				chunk_size=self.chunk_size.value(), houdini_version=houdini_version())
+				chunk_size=self.chunk_size.value(),
+				houdini_version=self.running_version or self.version.currentText())
 		except DeadlineError as error:
 			return SubmitResult(job, False, '', str(error))
 
