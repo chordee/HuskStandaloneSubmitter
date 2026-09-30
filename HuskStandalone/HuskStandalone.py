@@ -38,6 +38,14 @@ class HuskStandalone(DeadlinePlugin):
 
 
 	def RenderExecutable(self):
+		# In a rez context husk is found on the context's PATH, see RezArguments
+		if self.RezArguments():
+			path_list = self.GetConfigEntryWithDefault('Rez_Executable', '')
+			executable_path = FileUtils.SearchFileList(path_list)
+			if not executable_path:
+				self.FailRender('Failed to find the rez executable in Rez_Executable:\n{}'.format(path_list))
+			return executable_path
+
 		# Version is major.minor[.build], eg. 21.0.440 -> Houdini21_0_Husk_Executable
 		version = self.GetPluginInfoEntryWithDefault( 'Version', '' )
 		if not version:
@@ -48,6 +56,21 @@ class HuskStandalone(DeadlinePlugin):
 		if not executable_path:
 			self.FailRender('Failed to find the husk executable for Houdini {} in {}:\n{}'.format(version, config_key, path_list))
 		return executable_path
+
+
+	def RezArguments(self):
+		'''
+		rez env arguments running husk in the job's rez context (.rxt) or
+		package request, or an empty string when the job doesn't use rez.
+		'''
+		context = self.GetPluginInfoEntryWithDefault('RezContext', '')
+		if context:
+			context = RepositoryUtils.CheckPathMapping(context).replace('\\', '/')
+			return 'env --input "{}" -- husk '.format(context)
+		request = self.GetPluginInfoEntryWithDefault('RezRequest', '')
+		if request:
+			return 'env {} -- husk '.format(request)
+		return ''
 
 
 	def RenderArgument( self ):
@@ -61,7 +84,7 @@ class HuskStandalone(DeadlinePlugin):
 		frame = self.GetStartFrame()
 		frame_count = self.GetEndFrame() - frame + 1
 
-		argument = ''
+		argument = self.RezArguments()
 		argument += f'--usd-input "{usd_file_path}"'
 		argument += f' --frame {frame}'
 		argument += f' --frame-count {frame_count}'

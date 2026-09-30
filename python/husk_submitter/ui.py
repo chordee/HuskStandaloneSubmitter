@@ -14,7 +14,7 @@ from pathlib import Path
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .deadline import DeadlineError, SubmitResult, find_deadlinecommand, submit_job
+from .deadline import DeadlineError, SubmitResult, find_deadlinecommand, parse_environment, submit_job
 from .jobs import Job, JobOptions, find_output_collisions, plan_jobs, set_outputs
 from .options import GROUPS, HOUDINI_VERSIONS, OPTIONS, USD_FILE_FILTER, HuskOption, Kind
 from .render_info import RenderInfoError, read_cameras, read_render_info
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 WINDOW_TITLE = 'Husk Deadline Submitter'
 PER_JOB_FLAGS = ('--pass', '--settings', '--output')
 COLLISION_COLOR = QtGui.QColor('#e06c6c')
+REZ_REQUEST_VARIABLE = 'REZ_USED_REQUEST'
 FILE_OVERRIDE_LABELS = {
 	'frames': 'Frame Range', '--renderer': 'Renderer', '--settings': 'Settings',
 	'--camera': 'Camera', '--res': 'Resolution', '--output': 'Output/s'}
@@ -54,6 +55,13 @@ def houdini_version() -> str:
 	except ImportError:
 		return ''
 	return hou.applicationVersionString()
+
+
+def user_settings() -> QtCore.QSettings:
+	'''
+	Values remembered between sessions, such as the last directory, rez and environment.
+	'''
+	return QtCore.QSettings('HuskStandaloneSubmitter', 'HoudiniSubmitter')
 
 
 def default_batch_name(paths: list[str]) -> str:
@@ -292,7 +300,7 @@ class SubmitterDialog(QtWidgets.QDialog):
 	def __init__(self, parent: QtWidgets.QWidget | None = None, usd_paths: list[str] | None = None) -> None:
 		super().__init__(parent)
 		self.setWindowTitle(WINDOW_TITLE)
-		self.settings = QtCore.QSettings('HuskStandaloneSubmitter', 'HoudiniSubmitter')
+		self.settings = user_settings()
 		self.rows = {option.flag: OptionRow(option) for option in OPTIONS}
 		self._batch_edited = False
 		self.running_version = houdini_version()
@@ -350,6 +358,22 @@ class SubmitterDialog(QtWidgets.QDialog):
 				'Houdini version of the husk executable used to render,\n'
 				'as set in Configure Plugin > HuskStandalone.')
 			form.addRow('Houdini Version', self.version)
+
+		# Inside a rez context, default to its request so the farm renders in the same packages
+		self.rez = QtWidgets.QLineEdit(os.environ.get(REZ_REQUEST_VARIABLE) or self.settings.value('rez', ''))
+		self.rez.setPlaceholderText('Package request or context file (.rxt)')
+		self.rez.setToolTip(
+			"Render with husk from a rez context instead of the Houdini Version's husk.\n"
+			'A package request, eg. houdini-21.0 ocio_aces, or a context file (.rxt).\n'
+			'Ignored if blank. Requires Rez Executable in Configure Plugin > HuskStandalone.')
+		self.environment = QtWidgets.QPlainTextEdit(self.settings.value('environment', ''))
+		self.environment.setPlaceholderText('KEY=VALUE, one per line')
+		self.environment.setFixedHeight(self.environment.fontMetrics().lineSpacing() * 4 + 12)
+		self.environment.setToolTip(
+			'Environment variables set when rendering, one KEY=VALUE per line.\n'
+			"They can also be changed after submission in the job's Environment properties.")
+		form.addRow('Rez', self.rez)
+		form.addRow('Environment', self.environment)
 		form.addRow('Frames Per Task', self.chunk_size)
 		form.addRow('Frame Range', self._build_frame_range())
 		return group
@@ -539,6 +563,10 @@ class SubmitterDialog(QtWidgets.QDialog):
 		for path, overrides in self.file_overrides.items():
 			if 'frames' in overrides and overrides['frames'][1] < overrides['frames'][0]:
 				return f'End Frame must be higher than Start Frame for {os.path.basename(path)}.'
+		try:
+			parse_environment(self.environment.toPlainText())
+		except ValueError as error:
+			return str(error)
 		return ''
 
 	def submit(self) -> None:
@@ -546,6 +574,8 @@ class SubmitterDialog(QtWidgets.QDialog):
 		if error:
 			QtWidgets.QMessageBox.warning(self, WINDOW_TITLE, error)
 			return
+		self.settings.setValue('rez', self.rez.text().strip())
+		self.settings.setValue('environment', self.environment.toPlainText())
 
 		QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
 		try:
@@ -586,7 +616,8 @@ class SubmitterDialog(QtWidgets.QDialog):
 			return submit_job(
 				job, command, batch_name=self.batch_name.text().strip(), comment=self.comment.text(),
 				chunk_size=self.chunk_size.value(),
-				houdini_version=self.running_version or self.version.currentText())
+				houdini_version=self.running_version or self.version.currentText(),
+				environment=parse_environment(self.environment.toPlainText()), rez=self.rez.text())
 		except DeadlineError as error:
 			return SubmitResult(job, False, '', str(error))
 

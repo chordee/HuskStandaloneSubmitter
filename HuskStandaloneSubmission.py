@@ -28,6 +28,7 @@ class ControlType(Enum):
 	button = 'ButtonControl'
 	combo = 'ComboControl'
 	multilist = 'MultiSelectListControl'
+	multiline = 'MultiLineTextControl'
 
 
 @dataclass
@@ -97,6 +98,37 @@ def load_browser_location() -> str:
 		return file.read()
 
 
+# Controls whose values are remembered between submissions
+STICKY_CONTROLS = ('rez_control', 'environment_control')
+
+
+def save_sticky_values(dialog: DeadlineScriptDialog) -> None:
+	for name in STICKY_CONTROLS:
+		with open(Path.Combine( GetDeadlineTempPath(), f'husk_{name}.txt' ), 'w') as file:
+			file.write(dialog.GetValue(name))
+
+
+def load_sticky_values(dialog: DeadlineScriptDialog) -> None:
+	for name in STICKY_CONTROLS:
+		txt_path = Path.Combine( GetDeadlineTempPath(), f'husk_{name}.txt' )
+		if os.path.exists(txt_path):
+			with open(txt_path, 'r') as file:
+				dialog.SetValue(name, file.read())
+
+
+def parse_environment(text: str) -> dict[str, str]:
+	'''
+	Environment variables from KEY=VALUE lines. Blank lines are ignored.
+	'''
+	environment = {}
+	for line in filter(None, (line.strip() for line in text.splitlines())):
+		key, separator, value = line.partition('=')
+		if not separator or not key.strip():
+			raise ValueError(f'Invalid environment variable {line!r}, expected KEY=VALUE')
+		environment[key.strip()] = value.strip()
+	return environment
+
+
 def files_selected(dialog: DeadlineScriptDialog):
 	'''
 	Sets the Batch Name to the shortest common prefix of input files
@@ -161,6 +193,23 @@ CONTROLS = {  # End key with _,+ or - for group, expanded group or collapsed gro
 			tooltip = (
 				"Houdini version of the husk executable used to render,\n"
 				"as set in Configure Plugin > HuskStandalone."))],
+		[Control(
+			name = 'rez_control',
+			label = 'Rez',
+			type = ControlType.text,
+			value = [''],
+			tooltip = (
+				"Render with husk from a rez context instead of the Houdini Version's husk.\n"
+				"A package request, eg. houdini-21.0 ocio_aces, or a context file (.rxt).\n"
+				"Ignored if blank. Requires Rez Executable in Configure Plugin > HuskStandalone."))],
+		[Control(
+			name = 'environment_control',
+			label = 'Environment',
+			type = ControlType.multiline,
+			value = [''],
+			tooltip = (
+				"Environment variables set when rendering, one KEY=VALUE per line.\n"
+				"They can also be changed after submission in the job's Environment properties."))],
 		[Control(
 			name = 'chunk_control',
 			label = 'Frames Per Task',
@@ -750,7 +799,9 @@ def build_jobs(dialog: DeadlineScriptDialog, usd_file_path: str, arguments: dict
 	return jobs
 
 
-def submit_job(job: JobSubmission, batch_name: str, comment: str, chunk_size: int, version: str) -> str:
+def submit_job(
+		job: JobSubmission, batch_name: str, comment: str, chunk_size: int, version: str,
+		environment: dict[str, str], rez: str) -> str:
 	'''
 	Write the job and plugin info files and submit them to Deadline.
 	Returns the deadlinecommand output.
@@ -767,6 +818,8 @@ def submit_job(job: JobSubmission, batch_name: str, comment: str, chunk_size: in
 	writer.WriteLine( f'ChunkSize={chunk_size}')
 	for i, productname in enumerate(job.productnames):
 		writer.WriteLine( f'OutputFilename{i}={productname}' )
+	for i, (key, value) in enumerate(environment.items()):
+		writer.WriteLine( f'EnvironmentKeyValue{i}={key}={value}' )
 	writer.Close()
 
 	# Create plugin info file.
@@ -776,6 +829,9 @@ def submit_job(job: JobSubmission, batch_name: str, comment: str, chunk_size: in
 	for argument, value in job.arguments.items():
 		writer.WriteLine( f'{argument}={value}' )
 	writer.WriteLine( f'Version={version}' )
+	# A context file (.rxt) or a package request runs husk in rez, see HuskStandalone.RezArguments
+	if rez:
+		writer.WriteLine( f'{"RezContext" if rez.lower().endswith(".rxt") else "RezRequest"}={rez}' )
 	writer.Close()
 
 	# Setup the command line arguments.
@@ -800,6 +856,13 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 			and not dialog.GetValue('framerange_control_1') >= dialog.GetValue('framerange_control_0')):
 		dialog.ShowMessageBox( "End Frame must be higher than Start Frame", "Error" )
 		return
+
+	try:
+		environment = parse_environment(dialog.GetValue('environment_control'))
+	except ValueError as error:
+		dialog.ShowMessageBox(str(error), 'Error')
+		return
+	rez = dialog.GetValue('rez_control').strip()
 
 	version = dialog.GetValue('version_control')
 	try:
@@ -841,11 +904,12 @@ def submit_pressed(dialog: DeadlineScriptDialog) -> None:
 	batch_name = dialog.GetValue('batch_control')
 	comment = dialog.GetValue('comment_control')
 	chunk_size = dialog.GetValue('chunk_control')
+	save_sticky_values(dialog)
 
 	for job_index, job in enumerate(jobs):
 		# Progress in titlebar
 		dialog.SetTitle(f'{WINDOW_TITLE} - Submitting Job {job_index + 1}/{len(jobs)}')
-		result = submit_job(job, batch_name, comment, chunk_size, version)
+		result = submit_job(job, batch_name, comment, chunk_size, version, environment, rez)
 		# Key by directory and job name so same-named USD files in different directories stay separate
 		result_key = os.path.join(os.path.dirname(job.arguments['--usd-input']), job.name)
 		results['success' if 'Result=Success' in result else 'fail'][result_key] = result
@@ -954,6 +1018,7 @@ def submission_dialog(*args) -> DeadlineScriptDialog:
 
 	toggle_enabled(dialog)
 	files_selected(dialog)
+	load_sticky_values(dialog)
 	dialog.SetValue('file_paths_control', ';'.join(args))
 
 	return dialog

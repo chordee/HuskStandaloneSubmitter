@@ -28,7 +28,8 @@ Both submitters create the same `HuskStandalone` plugin jobs and can be used sid
 - Output paths with `{usd}`, `{pass}` and `{settings}` tokens, and warnings when jobs would write the same files
 - Overrides per USD file (frame range, renderer, settings, camera, resolution, outputs) and outputs per job (Houdini and standalone submitter)
 - Output file names shown in the Monitor, so renders can be browsed from the job
-- Husk executable chosen per Houdini version
+- Husk executable chosen per Houdini version, or rendering in a rez context
+- Environment variables for the render
 - Path mapping of the input USD and output paths (untested)
 
 ## Requirements
@@ -50,6 +51,8 @@ HuskStandaloneSubmission.py  > {DeadlineRepository}/custom/scripts/Submission
 In the Deadline Monitor go to **Tools > Configure Plugin > HuskStandalone** and set **Houdini 21.0 Husk Executable** and **Houdini 22.0 Husk Executable** under Render Executables. The defaults are the standard install locations with a `.000` placeholder build, e.g. `C:\Program Files\Side Effects Software\Houdini 21.0.000\bin\husk.exe`. Enter one path per line for alternative locations.
 
 Jobs render with the husk of the Houdini version they were submitted with. The Monitor submitter also uses that version's `usdcat` to read the USD files.
+
+To render in rez contexts, also set **Rez Executable** under Rez to the `rez` executable on the Workers.
 
 ### 3. Houdini submitter (optional)
 1. Copy `houdini/husk_submitter.json` to a Houdini packages directory, e.g. `$HOUDINI_USER_PREF_DIR/packages`.
@@ -86,6 +89,14 @@ PYTHONPATH=python uv run python -m husk_submitter.ui [usd_paths]
 
 In PowerShell, set the variable first with `$env:PYTHONPATH = "python"`. USD files are read with `usd-core`, so custom asset resolvers or file format plugins from Houdini are not available. Choose the **Houdini Version** in the dialog.
 
+![Houdini / standalone submitter](docs/images/submitter.png)
+
+### Rez and environment variables
+All submitters have **Rez** and **Environment** settings, shared by every job and remembered for the next submission.
+
+- **Rez** renders with the husk of a rez context instead of the Houdini Version's husk: the Worker runs `rez env <request> -- husk ...` for a package request such as `houdini-21.0 ocio_aces`, or `rez env --input <file> -- husk ...` for a context file (`.rxt`). husk must be on the context's `PATH`, and the Workers need access to the rez packages. Inside Houdini started from rez, it defaults to the current context's request (`REZ_USED_REQUEST`).
+- **Environment** sets environment variables when rendering, one `KEY=VALUE` per line. They can be changed after submission in the job's Environment properties in the Monitor.
+
 ### File overrides
 In the Houdini or standalone dialog, select one or more USD files to override the shared settings for those files in **File Overrides**: Frame Range, Renderer, Settings, Camera, Resolution and Output/s. Enabled rows replace the shared setting for every job of the file, and the **Overrides** column lists what each file overrides.
 
@@ -95,6 +106,8 @@ In the Houdini or standalone dialog, select one or more USD files to override th
 
 ### Reviewing jobs
 Clicking **Submit...** lists the jobs to be submitted with their outputs before anything is sent. Output paths written by more than one job are highlighted. Double-click a job's outputs to set them for that job only: a comma separated list with one path per RenderProduct, in which `{usd}`, `{pass}` and `{settings}` are expanded.
+
+![Reviewing jobs before submitting](docs/images/review.png)
 
 ## How outputs are determined
 `--pass`, `--settings` and `--output` together decide what is rendered and where:

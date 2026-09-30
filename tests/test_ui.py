@@ -23,6 +23,14 @@ def app() -> QtWidgets.QApplication:
 	return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 
+@pytest.fixture(autouse=True)
+def isolated_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+	'''Keep the tests from reading or writing the user's remembered values.'''
+	settings_path = str(tmp_path / 'settings.ini')
+	monkeypatch.setattr(ui, 'user_settings', lambda: QtCore.QSettings(settings_path, QtCore.QSettings.IniFormat))
+	monkeypatch.delenv(ui.REZ_REQUEST_VARIABLE, raising=False)
+
+
 @pytest.fixture
 def dialog(app: QtWidgets.QApplication, shot_usd: Path) -> ui.SubmitterDialog:
 	return ui.SubmitterDialog(usd_paths=[str(shot_usd)])
@@ -155,6 +163,42 @@ def test_file_overrides_on_several_files(dialog: ui.SubmitterDialog, other_usd: 
 	dialog._clear_usd()
 	assert dialog.file_overrides == {}
 	assert not panel.isEnabled()
+
+
+def test_environment_and_rez_are_submitted_and_remembered(dialog: ui.SubmitterDialog, shot_usd: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+	submitted = []
+	monkeypatch.setattr(ui.JobPreviewDialog, 'exec', lambda self: QtWidgets.QDialog.Accepted)
+	monkeypatch.setattr(ui, 'find_deadlinecommand', lambda: Path('deadlinecommand'))
+	monkeypatch.setattr(ui, 'submit_job', lambda job, *a, **k: submitted.append(k) or SubmitResult(job, True, 'id', ''))
+	monkeypatch.setattr(ui, 'show_results', lambda *args: None)
+	dialog.rez.setText('houdini-21.0 ocio_aces')
+	dialog.environment.setPlainText('OCIO=/aces.ocio\n\nSTUDIO=tw\n')
+
+	dialog.submit()
+
+	assert submitted[0]['environment'] == {'OCIO': '/aces.ocio', 'STUDIO': 'tw'}
+	assert submitted[0]['rez'] == 'houdini-21.0 ocio_aces'
+	reopened = ui.SubmitterDialog(usd_paths=[str(shot_usd)])
+	assert reopened.rez.text() == 'houdini-21.0 ocio_aces'
+	assert reopened.environment.toPlainText() == 'OCIO=/aces.ocio\n\nSTUDIO=tw\n'
+
+
+def test_invalid_environment_is_not_submitted(dialog: ui.SubmitterDialog, monkeypatch: pytest.MonkeyPatch) -> None:
+	warnings = []
+	monkeypatch.setattr(QtWidgets.QMessageBox, 'warning', lambda parent, title, text: warnings.append(text))
+	monkeypatch.setattr(ui, 'plan_jobs', lambda *args: pytest.fail('jobs planned with an invalid environment'))
+	dialog.environment.setPlainText('OCIO')
+
+	dialog.submit()
+
+	assert 'OCIO' in warnings[0]
+
+
+def test_rez_defaults_to_the_current_context(app: QtWidgets.QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
+	ui.user_settings().setValue('rez', 'remembered')
+	monkeypatch.setenv(ui.REZ_REQUEST_VARIABLE, 'houdini-21.0 studio_tools')
+
+	assert ui.SubmitterDialog().rez.text() == 'houdini-21.0 studio_tools'
 
 
 def test_running_houdini_version_is_used(app: QtWidgets.QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
