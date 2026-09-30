@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pxr import Sdf, Usd, UsdRender
+from pxr import Sdf, Usd, UsdGeom, UsdRender
 
 
 def make_stage(
@@ -12,7 +12,8 @@ def make_stage(
 		settings: dict[str, list[str]],
 		passes: dict[str, str] | None = None,
 		default_settings: str = '',
-		frame_range: tuple[int, int] | None = (1001, 1010)) -> Path:
+		frame_range: tuple[int, int] | None = (1001, 1010),
+		cameras: tuple[str, ...] = ()) -> Path:
 	'''
 	Author a USD file with render prims.
 	products values are a static productName or {time: productName} samples.
@@ -40,6 +41,9 @@ def make_stage(
 		if source:
 			render_pass.CreateRenderSourceRel().SetTargets([Sdf.Path(source)])
 
+	for prim_path in cameras:
+		UsdGeom.Camera.Define(stage, prim_path)
+
 	stage.GetRootLayer().Save()
 	return path
 
@@ -64,4 +68,5 @@ def shot_usd(tmp_path: Path) -> Path:
 			'/Render/pass_fg': '/Render/rs_beauty',
 			'/Render/pass_bg': '/Render/rs_beauty',
 		},
-		default_settings='/Render/rs_beauty')
+		default_settings='/Render/rs_beauty',
+		cameras=('/cameras/main', '/cameras/closeup'))

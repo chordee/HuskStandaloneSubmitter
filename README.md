@@ -26,7 +26,7 @@ Both submitters create the same `HuskStandalone` plugin jobs and can be used sid
 - Render pass submission (`--pass`, Houdini 21+), with pattern matching like `--settings`
 - Override render settings, resolution, camera, outputs and more, at submission or later from the Monitor
 - Output paths with `{usd}`, `{pass}` and `{settings}` tokens, and warnings when jobs would write the same files
-- Output overrides per USD file and per job (Houdini and standalone submitter)
+- Overrides per USD file (frame range, renderer, settings, camera, resolution, outputs) and outputs per job (Houdini and standalone submitter)
 - Output file names shown in the Monitor, so renders can be browsed from the job
 - Husk executable chosen per Houdini version
 - Path mapping of the input USD and output paths (untested)
@@ -86,9 +86,14 @@ PYTHONPATH=python uv run python -m husk_submitter.ui [usd_paths]
 
 In PowerShell, set the variable first with `$env:PYTHONPATH = "python"`. USD files are read with `usd-core`, so custom asset resolvers or file format plugins from Houdini are not available. Choose the **Houdini Version** in the dialog.
 
-### Outputs per USD file and per job
-In the Houdini or standalone dialog, double-click a file's **Output Override** in the USD file list to give that file its own outputs, replacing the shared **Output/s** for every job of the file. Leave it blank to use the shared setting.
+### File overrides
+In the Houdini or standalone dialog, select one or more USD files to override the shared settings for those files in **File Overrides**: Frame Range, Renderer, Settings, Camera, Resolution and Output/s. Enabled rows replace the shared setting for every job of the file, and the **Overrides** column lists what each file overrides.
 
+- Settings and Camera list the file's RenderSettings and camera prims. They can be typed too: Settings accepts the same list and `*` wildcards as the shared setting, and cameras inside payloads aren't listed.
+- With several files selected, the first file's overrides are shown and a changed row is applied to all of them. Other rows keep each file's own overrides.
+- Blank Settings, Camera and Output/s overrides use the shared setting.
+
+### Reviewing jobs
 Clicking **Submit...** lists the jobs to be submitted with their outputs before anything is sent. Output paths written by more than one job are highlighted. Double-click a job's outputs to set them for that job only: a comma separated list with one path per RenderProduct, in which `{usd}`, `{pass}` and `{settings}` are expanded.
 
 ## How outputs are determined

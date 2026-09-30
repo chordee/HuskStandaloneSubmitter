@@ -85,11 +85,31 @@ def test_submit_flow(dialog: ui.SubmitterDialog, monkeypatch: pytest.MonkeyPatch
 	assert len(shown[0][0]) == 2 and shown[0][1] == {}
 
 
-def test_output_override_per_usd_file(dialog: ui.SubmitterDialog, shot_usd: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.fixture
+def other_usd(dialog: ui.SubmitterDialog, shot_usd: Path, tmp_path: Path) -> Path:
 	other = tmp_path / 'other.usda'
 	other.write_text(shot_usd.read_text())
-	dialog.add_usd_paths([str(other), str(shot_usd)])
-	dialog.usd_table.item(1, 1).setText(' /other/{usd}.$F4.exr ')
+	dialog.add_usd_paths([str(other)])
+	return other
+
+
+def test_file_overrides(dialog: ui.SubmitterDialog, other_usd: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+	panel = dialog.file_panel
+	assert not panel.isEnabled()
+	dialog.usd_table.selectRow(1)
+
+	assert panel.title() == 'File Overrides: other.usda'
+	assert [panel.settings_prims.itemText(i) for i in range(panel.settings_prims.count())] == ['*', '/Render/rs_beauty', '/Render/rs_util']
+	assert [panel.camera.itemText(i) for i in range(panel.camera.count())] == ['/cameras/main', '/cameras/closeup']
+	for key in ui.FILE_OVERRIDE_LABELS:
+		panel.toggles[key].setChecked(True)
+	panel.start_frame.setValue(1)
+	panel.end_frame.setValue(5)
+	panel.renderer.setCurrentText('BRAY_HdKarma')
+	panel.settings_prims.setCurrentText('rs_util')
+	panel.camera.setCurrentText('/cameras/closeup')
+	panel.res_x.setValue(2048)
+	panel.output.setText('/other/{settings}.$F4.exr')
 	submitted = []
 	monkeypatch.setattr(ui.JobPreviewDialog, 'exec', lambda self: QtWidgets.QDialog.Accepted)
 	monkeypatch.setattr(ui, 'find_deadlinecommand', lambda: Path('deadlinecommand'))
@@ -98,15 +118,43 @@ def test_output_override_per_usd_file(dialog: ui.SubmitterDialog, shot_usd: Path
 
 	dialog.submit()
 
-	assert dialog.usd_paths() == [str(shot_usd), str(other)]
-	assert dialog.output_overrides() == {other: '/other/{usd}.$F4.exr'}
-	assert [job.outputs for job in submitted] == [['/out/beauty.%04d.exr', '/out/depth.%04d.exr'], ['/other/other.$F4.exr']]
+	assert dialog.usd_table.item(0, 1).text() == ''
+	assert dialog.usd_table.item(1, 1).text() == 'Frame Range, Renderer, Settings, Camera, Resolution, Output/s'
+	shot_job, other_job = submitted
+	assert (shot_job.frames, shot_job.plugin_info['override_--camera']) == ('1001-1010', 'False')
+	assert other_job.frames == '1-5'
+	assert other_job.outputs == ['/other/rs_util.$F4.exr']
+	assert other_job.plugin_info['--renderer'] == 'BRAY_HdKarma'
+	assert (other_job.plugin_info['override_--camera'], other_job.plugin_info['--camera']) == ('True', '/cameras/closeup')
+	assert (other_job.plugin_info['override_--res'], other_job.plugin_info['--res']) == ('True', '2048 1080')
+
+
+def test_file_overrides_on_several_files(dialog: ui.SubmitterDialog, other_usd: Path, shot_usd: Path) -> None:
+	panel = dialog.file_panel
+	dialog.usd_table.selectRow(0)
+	panel.toggles['--camera'].setChecked(True)
+	panel.camera.setCurrentText('/cameras/closeup')
+	dialog.usd_table.selectRow(1)
+	panel.toggles['--output'].setChecked(True)  # blank, so the shared Output/s is used
+	assert not panel.toggles['--camera'].isChecked()
+
+	dialog.usd_table.selectAll()
+	assert panel.title() == 'File Overrides: 2 files'
+	assert panel.camera.currentText() == '/cameras/closeup'
+	panel.toggles['frames'].setChecked(True)
+	panel.end_frame.setValue(1100)
+
+	assert dialog.file_overrides == {
+		str(shot_usd): {'--camera': '/cameras/closeup', 'frames': (1001, 1100)},
+		str(other_usd): {'--output': '', 'frames': (1001, 1100)}}
+	assert dialog.file_job_options()[other_usd].output_override == ''
 
 	dialog.usd_table.selectRow(0)
 	dialog._remove_selected()
-	assert dialog.usd_paths() == [str(other)]
+	assert list(dialog.file_overrides) == [str(other_usd)]
 	dialog._clear_usd()
-	assert dialog.usd_paths() == []
+	assert dialog.file_overrides == {}
+	assert not panel.isEnabled()
 
 
 def test_running_houdini_version_is_used(app: QtWidgets.QApplication, monkeypatch: pytest.MonkeyPatch) -> None:

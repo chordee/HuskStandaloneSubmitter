@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from conftest import make_stage
-from husk_submitter.render_info import RenderInfoError, read_render_info
+from husk_submitter.render_info import RenderInfoError, read_cameras, read_render_info
 
 
 def test_reads_render_prims(shot_usd: Path) -> None:
@@ -58,3 +58,9 @@ def test_unreadable_file(tmp_path: Path) -> None:
 
 	with pytest.raises(RenderInfoError):
 		read_render_info(path)
+	with pytest.raises(RenderInfoError):
+		read_cameras(path)
+
+
+def test_reads_cameras_outside_render_root(shot_usd: Path) -> None:
+	assert read_cameras(shot_usd) == ['/cameras/main', '/cameras/closeup']
