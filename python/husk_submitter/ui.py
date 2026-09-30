@@ -371,7 +371,8 @@ class SubmitterDialog(QtWidgets.QDialog):
 		self.environment.setFixedHeight(self.environment.fontMetrics().lineSpacing() * 4 + 12)
 		self.environment.setToolTip(
 			'Environment variables set when rendering, one KEY=VALUE per line.\n'
-			"They can also be changed after submission in the job's Environment properties.")
+			"They can also be changed after submission in the job's Environment properties.\n"
+			'Stored in plain text and remembered, not for passwords or tokens.')
 		form.addRow('Rez', self.rez)
 		form.addRow('Environment', self.environment)
 		form.addRow('Frames Per Task', self.chunk_size)

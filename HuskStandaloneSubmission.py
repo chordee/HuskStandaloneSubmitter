@@ -209,7 +209,8 @@ CONTROLS = {  # End key with _,+ or - for group, expanded group or collapsed gro
 			value = [''],
 			tooltip = (
 				"Environment variables set when rendering, one KEY=VALUE per line.\n"
-				"They can also be changed after submission in the job's Environment properties."))],
+				"They can also be changed after submission in the job's Environment properties.\n"
+				"Stored in plain text and remembered, not for passwords or tokens."))],
 		[Control(
 			name = 'chunk_control',
 			label = 'Frames Per Task',
@@ -829,7 +830,7 @@ def submit_job(
 	for argument, value in job.arguments.items():
 		writer.WriteLine( f'{argument}={value}' )
 	writer.WriteLine( f'Version={version}' )
-	# A context file (.rxt) or a package request runs husk in rez, see HuskStandalone.RezCommand
+	# A context file (.rxt) or a package request runs husk in rez, see HuskStandalone.rez_arguments
 	if rez:
 		writer.WriteLine( f'{"RezContext" if rez.lower().endswith(".rxt") else "RezRequest"}={rez}' )
 	writer.Close()

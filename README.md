@@ -94,8 +94,11 @@ In PowerShell, set the variable first with `$env:PYTHONPATH = "python"`. USD fil
 ### Rez and environment variables
 All submitters have **Rez** and **Environment** settings, shared by every job and remembered for the next submission.
 
-- **Rez** renders with the husk of a rez context instead of the Houdini Version's husk: the Worker runs `rez env <request> -- husk ...` for a package request such as `houdini-21.0 ocio_aces`, or `rez env --input <file> -- husk ...` for a context file (`.rxt`). husk must be on the context's `PATH`, and the Workers need access to the rez packages. Inside Houdini started from rez, it defaults to the current context's request (`REZ_USED_REQUEST`).
+- **Rez** renders with the husk of a rez context instead of the Houdini Version's husk, for a package request such as `houdini-21.0 ocio_aces` or a context file (`.rxt`). husk must be on the context's `PATH`, and the Workers need access to the rez packages. Inside Houdini started from rez, it defaults to the current context's request (`REZ_USED_REQUEST`).
+  - The Worker runs `rez env <request> --shell cmd -c "husk ..."` (or `rez env --input <file.rxt> ...`), with `--shell bash` on Linux and macOS. husk is passed as one command with each argument quoted for that shell, as rez would otherwise re-split the arguments for its default shell and expand `$F4`, `%04d` or `&` in output and slap comp paths.
+  - A context file holds the packages resolved on the machine it was saved on, including platform variants. A context saved on Windows can't be used by Linux Workers, use a package request for mixed farms.
 - **Environment** sets environment variables when rendering, one `KEY=VALUE` per line. They can be changed after submission in the job's Environment properties in the Monitor.
+  - The values are stored in plain text, in the job and in the remembered settings. Don't use it for passwords or tokens.
 
 ### File overrides
 In the Houdini or standalone dialog, select one or more USD files to override the shared settings for those files in **File Overrides**: Frame Range, Renderer, Settings, Camera, Resolution and Output/s. Enabled rows replace the shared setting for every job of the file, and the **Overrides** column lists what each file overrides.
