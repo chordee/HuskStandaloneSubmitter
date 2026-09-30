@@ -829,7 +829,7 @@ def submit_job(
 	for argument, value in job.arguments.items():
 		writer.WriteLine( f'{argument}={value}' )
 	writer.WriteLine( f'Version={version}' )
-	# A context file (.rxt) or a package request runs husk in rez, see HuskStandalone.RezArguments
+	# A context file (.rxt) or a package request runs husk in rez, see HuskStandalone.RezCommand
 	if rez:
 		writer.WriteLine( f'{"RezContext" if rez.lower().endswith(".rxt") else "RezRequest"}={rez}' )
 	writer.Close()

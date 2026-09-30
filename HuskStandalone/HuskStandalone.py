@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import os
+
 from Deadline.Plugins import DeadlinePlugin
 from Deadline.Scripting import FileUtils, RepositoryUtils
 
@@ -38,8 +40,8 @@ class HuskStandalone(DeadlinePlugin):
 
 
 	def RenderExecutable(self):
-		# In a rez context husk is found on the context's PATH, see RezArguments
-		if self.RezArguments():
+		# In a rez context husk is found on the context's PATH, see RezCommand
+		if self.RezEnvArguments():
 			path_list = self.GetConfigEntryWithDefault('Rez_Executable', '')
 			executable_path = FileUtils.SearchFileList(path_list)
 			if not executable_path:
@@ -58,19 +60,34 @@ class HuskStandalone(DeadlinePlugin):
 		return executable_path
 
 
-	def RezArguments(self):
+	def RezEnvArguments(self):
 		'''
-		rez env arguments running husk in the job's rez context (.rxt) or
-		package request, or an empty string when the job doesn't use rez.
+		rez env arguments for the job's rez context (.rxt) or package request,
+		or an empty string when the job doesn't use rez.
 		'''
 		context = self.GetPluginInfoEntryWithDefault('RezContext', '')
 		if context:
 			context = RepositoryUtils.CheckPathMapping(context).replace('\\', '/')
-			return 'env --input "{}" -- husk '.format(context)
+			return 'env --input "{}"'.format(context)
 		request = self.GetPluginInfoEntryWithDefault('RezRequest', '')
 		if request:
-			return 'env {} -- husk '.format(request)
+			return 'env {}'.format(request)
 		return ''
+
+
+	def RezCommand(self, env_arguments, husk_arguments):
+		'''
+		rez arguments running husk in the rez context.
+		husk is passed as a command string for a fixed shell rather than after --,
+		which rez re-splits and joins for the configured default shell. The shell's
+		special characters are escaped, as output paths contain %04d or $F4.
+		'''
+		command = 'husk ' + husk_arguments
+		if os.name == 'nt':
+			shell, command = 'cmd', command.replace('%', '%%')
+		else:
+			shell, command = 'bash', command.replace('$', '\\$').replace('`', '\\`')
+		return '{} --shell {} -c "{}"'.format(env_arguments, shell, command.replace('"', '\\"'))
 
 
 	def RenderArgument( self ):
@@ -84,7 +101,7 @@ class HuskStandalone(DeadlinePlugin):
 		frame = self.GetStartFrame()
 		frame_count = self.GetEndFrame() - frame + 1
 
-		argument = self.RezArguments()
+		argument = ''
 		argument += f'--usd-input "{usd_file_path}"'
 		argument += f' --frame {frame}'
 		argument += f' --frame-count {frame_count}'
@@ -129,6 +146,10 @@ class HuskStandalone(DeadlinePlugin):
 			self.KarmaGPUAffinity()
 			self.RedshiftGPUAffinity()
 
+		env_arguments = self.RezEnvArguments()
+		if env_arguments:
+			self.LogInfo('Rendering in rez: {}'.format(env_arguments))
+			argument = self.RezCommand(env_arguments, argument)
 		return argument
 
 
