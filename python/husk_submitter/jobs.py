@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Iterable
@@ -255,24 +255,21 @@ def find_output_collisions(jobs: list[Job]) -> list[str]:
 
 def plan_jobs(
 		usd_paths: Iterable[Path], options: JobOptions,
-		output_overrides: dict[Path, str] | None = None) -> tuple[list[Job], dict[str, str]]:
+		file_options: dict[Path, JobOptions] | None = None) -> tuple[list[Job], dict[str, str]]:
 	'''
 	Build uniquely named jobs for every USD file.
-	output_overrides replaces options.output_override for the given files.
+	file_options replaces options for the given files.
 	Returns the jobs and a mapping of USD path -> error for files that failed.
 	'''
-	output_overrides = output_overrides or {}
+	file_options = file_options or {}
 	jobs: list[Job] = []
 	failures: dict[str, str] = {}
 	for usd_path in usd_paths:
 		if not usd_path.is_file():
 			failures[str(usd_path)] = "USD file doesn't exist"
 			continue
-		file_options = options
-		if output_overrides.get(usd_path):
-			file_options = replace(options, output_override=output_overrides[usd_path])
 		try:
-			jobs += build_jobs(read_render_info(usd_path, options.render_root), file_options)
+			jobs += build_jobs(read_render_info(usd_path, options.render_root), file_options.get(usd_path, options))
 		except (RenderInfoError, SubmissionError) as error:
 			failures[str(usd_path)] = str(error)
 

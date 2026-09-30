@@ -136,15 +136,20 @@ def test_output_collisions(shot_usd: Path) -> None:
 	assert find_output_collisions(plan_jobs([shot_usd], unique)[0]) == []
 
 
-def test_output_overrides_per_file(shot_usd: Path, tmp_path: Path) -> None:
+def test_options_per_file(shot_usd: Path, tmp_path: Path) -> None:
 	other = tmp_path / 'other.usda'
 	other.write_text(shot_usd.read_text())
 	options = JobOptions(output_override='/shared/{usd}.$F4.exr')
+	other_options = JobOptions(
+		arguments={'--camera': '/cameras/closeup'}, settings_pattern='rs_util',
+		output_override='/other/{settings}.$F4.exr', frame_range=(1, 5))
 
-	jobs, _ = plan_jobs([shot_usd, other], options, {other: '/other/{usd}.$F4.exr'})
+	jobs, _ = plan_jobs([shot_usd, other], options, {other: other_options})
 
-	assert [job.outputs for job in jobs] == [['/shared/shot_v001.$F4.exr'], ['/other/other.$F4.exr']]
-	assert options.output_override == '/shared/{usd}.$F4.exr'
+	assert [job.outputs for job in jobs] == [['/shared/shot_v001.$F4.exr'], ['/other/rs_util.$F4.exr']]
+	assert [job.frames for job in jobs] == ['1001-1010', '1-5']
+	assert jobs[1].plugin_info['--camera'] == '/cameras/closeup'
+	assert '--camera' not in jobs[0].plugin_info
 
 
 def test_set_outputs_expands_tokens(shot_usd: Path) -> None:

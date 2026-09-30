@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pxr import Usd, UsdRender
+from pxr import Usd, UsdGeom, UsdRender
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +69,20 @@ def read_render_info(path: Path, render_root: str = RENDER_ROOT) -> RenderInfo:
 			info.products[prim_path] = _product_name(UsdRender.Product(prim).GetProductNameAttr())
 
 	return info
+
+
+def read_cameras(path: Path) -> list[str]:
+	'''
+	Camera prim paths of a USD file. Payloads are not loaded,
+	so cameras inside payloads are not found.
+	'''
+	try:
+		stage = Usd.Stage.Open(str(path), Usd.Stage.LoadNone)
+	except Exception as error:  # pxr raises Tf.ErrorException
+		raise RenderInfoError(f'Failed to open {path}: {error}') from error
+	if stage is None:
+		raise RenderInfoError(f'Failed to open {path}')
+	return [str(prim.GetPath()) for prim in stage.Traverse() if prim.IsA(UsdGeom.Camera)]
 
 
 def _frame_range(stage: Usd.Stage) -> tuple[int, int]:

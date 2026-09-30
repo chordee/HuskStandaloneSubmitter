@@ -33,3 +33,12 @@ Index=1
 Label=Houdini 22.0 Husk Executable
 Description=The path to the Houdini 22.0 husk executable. Enter alternative paths on separate lines.
 Default=C:\Program Files\Side Effects Software\Houdini 22.0.000\bin\husk.exe;/Applications/Houdini/Houdini22.0.000/Frameworks/Houdini.framework/Versions/22.0.000/Resources/bin/husk;/opt/hfs22.0/bin/husk
+
+[Rez_Executable]
+Type=multilinemultifilename
+Category=Rez
+CategoryOrder=1
+Index=0
+Label=Rez Executable
+Description=The path to the rez executable, for jobs submitted with a rez package request or context (.rxt). husk is then run from the rez context's PATH. Enter alternative paths on separate lines.
+Default=

@@ -37,6 +37,36 @@ def test_plugin_info_version_is_not_a_husk_argument(job: Job) -> None:
 	assert info['Version'] == '21.0.440'
 
 
+def test_parse_environment() -> None:
+	text = ' OCIO = //server/aces/config.ocio \n\nHOUDINI_PATH=//server/tools;&\nEMPTY=\n'
+
+	assert deadline.parse_environment(text) == {
+		'OCIO': '//server/aces/config.ocio', 'HOUDINI_PATH': '//server/tools;&', 'EMPTY': ''}
+	with pytest.raises(ValueError, match='NO_VALUE'):
+		deadline.parse_environment('A=1\nNO_VALUE')
+	with pytest.raises(ValueError):
+		deadline.parse_environment('=1')
+
+
+def test_environment_in_job_info(job: Job) -> None:
+	info = deadline.job_info(job, environment={'OCIO': '/aces.ocio', 'A': 'x=y'})
+
+	assert info['EnvironmentKeyValue0'] == 'OCIO=/aces.ocio'
+	assert info['EnvironmentKeyValue1'] == 'A=x=y'
+
+
+@pytest.mark.parametrize(('rez', 'expected'), [
+	('', {}),
+	(' houdini-21.0 ocio_aces ', {'RezRequest': 'houdini-21.0 ocio_aces'}),
+	('//server/ctx/shot010.RXT', {'RezContext': '//server/ctx/shot010.RXT'}),
+])
+def test_rez_in_plugin_info(job: Job, rez: str, expected: dict[str, str]) -> None:
+	info = deadline.plugin_info(job, rez=rez)
+
+	assert {key: value for key, value in info.items() if key.startswith('Rez')} == expected
+	assert 'Rez' not in info['ArgumentList']
+
+
 def test_write_info_file_is_utf16(tmp_path: Path) -> None:
 	path = tmp_path / 'info.job'
 	deadline.write_info_file(path, {'Name': 'shot_ü', 'Frames': '1-2'})
