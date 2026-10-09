@@ -3,6 +3,7 @@ Tests for the Deadline plugin's husk command, loaded with stub Deadline modules.
 '''
 from __future__ import annotations
 
+import functools
 import shlex
 import subprocess
 import sys
@@ -114,6 +115,25 @@ def test_split_arguments(plugin: types.ModuleType, text: str, expected: list[str
 	assert plugin.split_arguments(text) == expected
 
 
+def test_split_arguments_keeps_hashes(plugin: types.ModuleType) -> None:
+	assert plugin.split_arguments('--log-file /render/shot#1.log --threads 16') == [
+		'--log-file', '/render/shot#1.log', '--threads', '16']
+
+
+@pytest.mark.parametrize('argument', ['x" & whoami & "', 'a\nwhoami', 'a\rb'])
+def test_cmd_quote_rejects_what_cmd_cannot_pass(plugin: types.ModuleType, argument: str) -> None:
+	with pytest.raises(ValueError):
+		plugin.cmd_quote(argument)
+
+
+def test_bash_passes_quotes_and_line_breaks(plugin: types.ModuleType) -> None:
+	arguments = ['--log-file', 'x" & whoami & "', 'a\nb']
+	command_line = plugin.rez_arguments(arguments, rez_request='houdini', windows=False)
+	argv = rez_argv(command_line) if sys.platform == 'win32' else shlex.split(command_line)
+
+	assert shlex.split(argv[5]) == ['husk', *arguments]
+
+
 def test_split_arguments_unclosed_quote(plugin: types.ModuleType) -> None:
 	with pytest.raises(ValueError):
 		plugin.split_arguments('--log-file "D:/logs')
@@ -186,6 +206,15 @@ def test_render_argument_in_rez_context(plugin: types.ModuleType) -> None:
 	plugin_info = dict(PLUGIN_INFO, ArgumentList='--usd-input', ExtraArguments='', RezContext='//server/ctx/shot010.rxt')
 
 	assert render_argument(plugin, plugin_info).startswith('env --input S:/ctx/shot010.rxt --shell ')
+
+
+def test_quotes_in_rez_on_windows_fail_the_render(plugin: types.ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+	'''A double quote kept by single quotes in Extra Arguments would end cmd's quoting.'''
+	monkeypatch.setattr(plugin, 'rez_arguments', functools.partial(plugin.rez_arguments, windows=True))
+	plugin_info = dict(PLUGIN_INFO, RezRequest='houdini', ExtraArguments="""--log-file 'x" & whoami & "'""")
+
+	with pytest.raises(RuntimeError, match='Cannot render in rez'):
+		render_argument(plugin, plugin_info)
 
 
 def test_invalid_extra_arguments_fail_the_render(plugin: types.ModuleType) -> None:

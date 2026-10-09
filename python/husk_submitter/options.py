@@ -70,6 +70,7 @@ EXTRA_ARGUMENTS = 'ExtraArguments'
 
 # Plugin info entries choosing the husk executable, written by the submitters outside ArgumentList.
 # Listed in the options file so they can be changed after submission.
+# Keep in sync with EXECUTABLE_SETTINGS in HuskStandaloneSubmission.py.
 EXECUTABLE = 'Executable'
 EXECUTABLE_SETTINGS = (
 	('Version', 'Houdini Version', 'String', '',

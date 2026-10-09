@@ -20,13 +20,18 @@ def split_arguments(text):
 	lexer = shlex.shlex(text, posix=True)
 	lexer.whitespace_split = True
 	lexer.escape = ''
+	lexer.commenters = ''  # keep # in values such as shot#1.log
 	return list(lexer)
 
 
 def cmd_quote(argument):
 	'''
 	Quote an argument for a cmd batch file, as rez runs commands in one.
+	cmd can't escape double quotes inside a quoted argument, and a line break
+	starts a new command, so arguments containing either are rejected.
 	'''
+	if any(character in argument for character in '"\r\n'):
+		raise ValueError('{!r} contains a double quote or line break, which cmd can\'t pass to husk'.format(argument))
 	argument = argument.replace('%', '%%')
 	if argument and not any(character in argument for character in CMD_SPECIAL_CHARACTERS):
 		return argument
@@ -173,7 +178,10 @@ class HuskStandalone(DeadlinePlugin):
 		rez_context, rez_request = self.RezSettings()
 		if rez_context or rez_request:
 			self.LogInfo('Rendering in rez: {}'.format(rez_context or rez_request))
-			return rez_arguments(arguments, rez_context, rez_request)
+			try:
+				return rez_arguments(arguments, rez_context, rez_request)
+			except ValueError as error:
+				self.FailRender('Cannot render in rez: {}'.format(error))
 		return subprocess.list2cmdline(arguments)
 
 

@@ -159,6 +159,18 @@ def files_selected(dialog: DeadlineScriptDialog):
 HOUDINI_VERSIONS = ['21.0', '22.0']
 # Plugin info entry of free form husk arguments, see HuskStandalone.split_arguments
 EXTRA_ARGUMENTS = 'ExtraArguments'
+# Plugin info entries choosing the husk executable, listed in the options file to change them
+# after submission. Keep in sync with EXECUTABLE_SETTINGS in python/husk_submitter/options.py.
+EXECUTABLE_SETTINGS = (
+	('Version', 'Houdini Version', 'String', '',
+		'Houdini version selecting the husk executable in Configure Plugin, eg. 21.0.\n'
+		'Ignored when rendering in rez.'),
+	('RezRequest', 'Rez Request', 'String', '',
+		'Render with husk from this rez package request, eg. houdini-21.0 ocio_aces.\n'
+		'Ignored when a Rez Context is set.'),
+	('RezContext', 'Rez Context', 'Filename', 'Rez Context Files (*.rxt)',
+		'Render with husk from this rez context file (.rxt).'),
+)
 
 
 def is_plugin_argument(control: Control) -> bool:
@@ -474,6 +486,21 @@ def generate_options_file() -> None:
 					writer.WriteLine( f'Label={label}' )
 					writer.WriteLine( '' )
 					index += 1
+
+	# Plugin info entries choosing the husk executable, which aren't controls
+	for key, label, option_type, file_filter, description in EXECUTABLE_SETTINGS:
+		writer.WriteLine( f'[{key}]' )
+		writer.WriteLine( 'Category=Executable' )
+		writer.WriteLine( f'CategoryOrder={len(CONTROLS)}' )
+		writer.WriteLine( f'Index={index}' )
+		writer.WriteLine( f'Description={description}' )
+		if file_filter:
+			writer.WriteLine( f'Filter={file_filter}' )
+		writer.WriteLine( 'DefaultValue=' )
+		writer.WriteLine( f'Type={option_type}' )
+		writer.WriteLine( f'Label={label}' )
+		writer.WriteLine( '' )
+		index += 1
 
 	writer.Close()
 
