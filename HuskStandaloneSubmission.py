@@ -157,6 +157,15 @@ def files_selected(dialog: DeadlineScriptDialog):
 
 # Define UI
 HOUDINI_VERSIONS = ['21.0', '22.0']
+# Plugin info entry of free form husk arguments, see HuskStandalone.split_arguments
+EXTRA_ARGUMENTS = 'ExtraArguments'
+
+
+def is_plugin_argument(control: Control) -> bool:
+	'''
+	Whether a control's value is written to the plugin info as a husk argument.
+	'''
+	return control.name.startswith('--') or control.name == EXTRA_ARGUMENTS
 WINDOW_TITLE = 'Deadline Husk Submitter'
 MAX_COLUMNS = 6
 MAX_LISTED_COLLISIONS = 5
@@ -300,6 +309,14 @@ CONTROLS = {  # End key with _,+ or - for group, expanded group or collapsed gro
 				"Verbosity of rendering statistics.\n"
 				"Note that verbose levels of 8 and greater may affect "
 				"rendering performance and should only be used for debugging problem scenes."))],
+		[Control(
+			name = EXTRA_ARGUMENTS,
+			label = 'Extra Arguments',
+			type = ControlType.text,
+			value = [''],
+			tooltip = (
+				"Additional husk arguments added after the others, eg. --threads 16.\n"
+				"Quote values containing spaces."))],
 	],
 
 	'RenderSettingsOverrides-': [
@@ -395,7 +412,7 @@ def generate_options_file() -> None:
 
 				if control.name == 'file_paths_control':
 					names = ['--usd-input']
-				elif not control.name.startswith('--'):
+				elif not is_plugin_argument(control):
 					continue
 				else:
 					if control.override is not None:
@@ -694,7 +711,7 @@ def get_argument_values(dialog: DeadlineScriptDialog) -> dict:
 	for control_rows in CONTROLS.values():
 		for control_row in control_rows:
 			for control in control_row:
-				if not control.name.startswith('--'):
+				if not is_plugin_argument(control):
 					continue
 
 				if control.override is not None:

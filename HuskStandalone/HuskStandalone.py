@@ -9,6 +9,18 @@ from Deadline.Scripting import FileUtils, RepositoryUtils
 # Husk arguments whose value is one argument, others are split on whitespace (eg. --res 1920 1080)
 PATH_ARGUMENTS = ('--output', '--slap-comp')
 CMD_SPECIAL_CHARACTERS = ' \t&|<>^()'
+EXTRA_ARGUMENTS = 'ExtraArguments'
+
+
+def split_arguments(text):
+	'''
+	Split free form husk arguments like a shell does, with quotes grouping values
+	containing spaces. Backslashes are kept for Windows paths.
+	'''
+	lexer = shlex.shlex(text, posix=True)
+	lexer.whitespace_split = True
+	lexer.escape = ''
+	return list(lexer)
 
 
 def cmd_quote(argument):
@@ -118,7 +130,8 @@ class HuskStandalone(DeadlinePlugin):
 			'--usd-input', usd_file_path, '--frame', str(frame),
 			'--frame-count', str(frame_count), '--make-output-path']
 		for arg_name in self.GetPluginInfoEntry('ArgumentList').split(';'):
-			if arg_name == '--usd-input':
+			# Extra arguments are added last, also when added after submission and missing from ArgumentList
+			if arg_name in ('--usd-input', EXTRA_ARGUMENTS):
 				continue
 
 			if arg_name.startswith('override'):
@@ -144,6 +157,11 @@ class HuskStandalone(DeadlinePlugin):
 				if arg_name == '--verbose':
 					value += 'a'  # Required for progress handling
 				arguments += [arg_name, *([value] if arg_name in PATH_ARGUMENTS else value.split())]
+
+		try:
+			arguments += split_arguments(self.GetPluginInfoEntryWithDefault(EXTRA_ARGUMENTS, ''))
+		except ValueError as error:
+			self.FailRender('Invalid {}: {}'.format(EXTRA_ARGUMENTS, error))
 
 		self.LogInfo(f"Rendering USD file: {usd_file_path}")
 

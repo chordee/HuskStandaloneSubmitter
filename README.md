@@ -25,6 +25,7 @@ Both submitters create the same `HuskStandalone` plugin jobs and can be used sid
 - Renderer selection (Karma XPU, Karma CPU, Redshift) and GPU affinity (Karma XPU, Redshift)
 - Render pass submission (`--pass`, Houdini 21+), with pattern matching like `--settings`
 - Override render settings, resolution, camera, outputs and more, at submission or later from the Monitor
+- Extra husk arguments, and changing the Houdini version or rez context of submitted jobs
 - Output paths with `{usd}`, `{pass}` and `{settings}` tokens, and warnings when jobs would write the same files
 - Overrides per USD file (frame range, renderer, settings, camera, resolution, outputs) and outputs per job (Houdini and standalone submitter)
 - Output file names shown in the Monitor, so renders can be browsed from the job
@@ -111,6 +112,14 @@ In the Houdini or standalone dialog, select one or more USD files to override th
 Clicking **Submit...** lists the jobs to be submitted with their outputs before anything is sent. Output paths written by more than one job are highlighted. Double-click a job's outputs to set them for that job only: a comma separated list with one path per RenderProduct, in which `{usd}`, `{pass}` and `{settings}` are expanded.
 
 ![Reviewing jobs before submitting](docs/images/review.png)
+
+### Changing jobs after submission
+The plugin builds the husk command from the job's plugin info when each task renders. To change a submitted job, right click it in the Monitor, select **Modify Job Properties > HuskStandalone Settings** and requeue its tasks. Besides the options of the submitters, this has:
+
+- **Extra Arguments** under Rendering: any other husk arguments, added after the others, eg. `--threads 16`. Quote values containing spaces.
+- **Houdini Version**, **Rez Request** and **Rez Context** under Executable: the husk to render with. A Rez Context is used over a Rez Request, and either over the Houdini Version.
+
+Environment variables are in the job's Environment properties.
 
 ## How outputs are determined
 `--pass`, `--settings` and `--output` together decide what is rendered and where:

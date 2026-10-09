@@ -65,6 +65,22 @@ RENDERING = 'Rendering'
 OVERRIDES = 'RenderSettingsOverrides'
 USD = 'USD'
 GROUPS = ('Submission', RENDERING, OVERRIDES, USD)
+# Plugin info entry of free form husk arguments, read by HuskStandalone.py rather than passed as a flag
+EXTRA_ARGUMENTS = 'ExtraArguments'
+
+# Plugin info entries choosing the husk executable, written by the submitters outside ArgumentList.
+# Listed in the options file so they can be changed after submission.
+EXECUTABLE = 'Executable'
+EXECUTABLE_SETTINGS = (
+	('Version', 'Houdini Version', 'String', '',
+		'Houdini version selecting the husk executable in Configure Plugin, eg. 21.0.\n'
+		'Ignored when rendering in rez.'),
+	('RezRequest', 'Rez Request', 'String', '',
+		'Render with husk from this rez package request, eg. houdini-21.0 ocio_aces.\n'
+		'Ignored when a Rez Context is set.'),
+	('RezContext', 'Rez Context', 'Filename', 'Rez Context Files (*.rxt)',
+		'Render with husk from this rez context file (.rxt).'),
+)
 
 OPTIONS: tuple[HuskOption, ...] = (
 	HuskOption(
@@ -107,6 +123,10 @@ OPTIONS: tuple[HuskOption, ...] = (
 		'Note that verbose levels of 8 and greater may affect '
 		'rendering performance and should only be used for debugging problem scenes.',
 		maximum=9),
+	HuskOption(
+		EXTRA_ARGUMENTS, 'Extra Arguments', Kind.TEXT, '', RENDERING,
+		'Additional husk arguments added after the others, eg. --threads 16.\n'
+		'Quote values containing spaces.'),
 	HuskOption(
 		'--res', 'Resolution', Kind.INT2, (1920, 1080), OVERRIDES,
 		'Rendered image width and height, in pixels.',
@@ -171,6 +191,12 @@ def options_file_text() -> str:
 			lines += _override_entry(option, category_order, index)
 			index += 1
 		lines += _option_entry(option, category_order, index)
+		index += 1
+	for key, label, option_type, file_filter, description in EXECUTABLE_SETTINGS:
+		lines += [
+			f'[{key}]', f'Category={EXECUTABLE}', f'CategoryOrder={len(GROUPS)}', f'Index={index}',
+			f'Description={description}', *([f'Filter={file_filter}'] if file_filter else []),
+			'DefaultValue=', f'Type={option_type}', f'Label={label}', '']
 		index += 1
 	return '﻿' + '\n'.join(lines) + '\n'
 

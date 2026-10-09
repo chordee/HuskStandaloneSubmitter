@@ -22,7 +22,10 @@ HUSK_ARGUMENTS = [
 def plugin() -> types.ModuleType:
 	stubs = {name: types.ModuleType(name) for name in ('Deadline', 'Deadline.Plugins', 'Deadline.Scripting')}
 	stubs['Deadline.Plugins'].DeadlinePlugin = object
-	stubs['Deadline.Scripting'].FileUtils = stubs['Deadline.Scripting'].RepositoryUtils = None
+	stubs['Deadline.Scripting'].FileUtils = None
+	# Path mapping from //server to S:
+	stubs['Deadline.Scripting'].RepositoryUtils = types.SimpleNamespace(
+		CheckPathMapping=lambda path: path.replace('//server', 'S:'))
 	saved = {name: sys.modules.get(name) for name in stubs}
 	sys.modules.update(stubs)
 	sys.path.insert(0, str(PLUGIN_DIRECTORY))
@@ -99,3 +102,92 @@ def test_husk_receives_its_arguments_through_bash(plugin: types.ModuleType) -> N
 
 	assert argv[:4] == ['env', 'houdini', '--shell', 'bash']
 	assert shlex.split(argv[5]) == ['husk', *HUSK_ARGUMENTS]
+
+
+@pytest.mark.parametrize(('text', 'expected'), [
+	('', []),
+	('--threads 16  --purge-frame', ['--threads', '16', '--purge-frame']),
+	('--log-file "D:/my logs/husk.log"', ['--log-file', 'D:/my logs/husk.log']),
+	(r'--log-file C:\logs\husk.log', ['--log-file', r'C:\logs\husk.log']),
+])
+def test_split_arguments(plugin: types.ModuleType, text: str, expected: list[str]) -> None:
+	assert plugin.split_arguments(text) == expected
+
+
+def test_split_arguments_unclosed_quote(plugin: types.ModuleType) -> None:
+	with pytest.raises(ValueError):
+		plugin.split_arguments('--log-file "D:/logs')
+
+
+class FakeJobPlugin:
+	'''Plugin info and task frames of a job, read through the DeadlinePlugin methods.'''
+
+	def __init__(self, plugin_info: dict[str, str]) -> None:
+		self.plugin_info = plugin_info
+		self.failures: list[str] = []
+
+	def GetPluginInfoEntry(self, key: str) -> str:
+		return self.plugin_info[key]
+
+	def GetPluginInfoEntryWithDefault(self, key: str, default: str) -> str:
+		return self.plugin_info.get(key, default)
+
+	def GetBooleanPluginInfoEntryWithDefault(self, key: str, default: bool) -> bool:
+		return self.plugin_info.get(key, str(default)) == 'True'
+
+	def GetStartFrame(self) -> int:
+		return 1001
+
+	def GetEndFrame(self) -> int:
+		return 1005
+
+	def LogInfo(self, message: str) -> None:
+		pass
+
+	def OverrideGpuAffinity(self) -> bool:
+		return False
+
+	def FailRender(self, message: str) -> None:
+		self.failures.append(message)
+		raise RuntimeError(message)
+
+
+def render_argument(plugin: types.ModuleType, plugin_info: dict[str, str]) -> str:
+	job = FakeJobPlugin(plugin_info)
+	for name in ('RenderArgument', 'RezSettings'):
+		setattr(job, name, getattr(plugin.HuskStandalone, name).__get__(job))
+	return job.RenderArgument()
+
+
+PLUGIN_INFO = {
+	'ArgumentList': 'override_--res;--res;--verbose;override_--output;--output;--usd-input;ExtraArguments',
+	'override_--res': 'True', '--res': '2048 858', '--verbose': '2',
+	'override_--output': 'True', '--output': '//server/render/beauty.$F4.exr',
+	'--usd-input': '//server/shots/shot010.usd', 'ExtraArguments': '--threads 16 --log-file "D:/my logs/husk.log"'}
+
+
+def test_render_argument(plugin: types.ModuleType) -> None:
+	argv = shlex.split(render_argument(plugin, PLUGIN_INFO))
+
+	assert argv == [
+		'--usd-input', 'S:/shots/shot010.usd', '--frame', '1001', '--frame-count', '5', '--make-output-path',
+		'--res', '2048', '858', '--verbose', '2a', '--output', 'S:/render/beauty.$F4.exr',
+		'--threads', '16', '--log-file', 'D:/my logs/husk.log']
+
+
+def test_extra_arguments_added_after_submission(plugin: types.ModuleType) -> None:
+	'''Modify Job Properties adds ExtraArguments to a job submitted without it in ArgumentList.'''
+	plugin_info = dict(PLUGIN_INFO, ArgumentList='--usd-input', ExtraArguments='--purge-frame')
+
+	assert render_argument(plugin, plugin_info).endswith('--make-output-path --purge-frame')
+
+
+def test_render_argument_in_rez_context(plugin: types.ModuleType) -> None:
+	plugin_info = dict(PLUGIN_INFO, ArgumentList='--usd-input', ExtraArguments='', RezContext='//server/ctx/shot010.rxt')
+
+	assert render_argument(plugin, plugin_info).startswith('env --input S:/ctx/shot010.rxt --shell ')
+
+
+def test_invalid_extra_arguments_fail_the_render(plugin: types.ModuleType) -> None:
+	with pytest.raises(RuntimeError, match='Invalid ExtraArguments'):
+		render_argument(plugin, dict(PLUGIN_INFO, ExtraArguments='--log-file "D:/logs'))
