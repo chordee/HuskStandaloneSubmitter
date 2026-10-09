@@ -9,12 +9,29 @@ from Deadline.Scripting import FileUtils, RepositoryUtils
 # Husk arguments whose value is one argument, others are split on whitespace (eg. --res 1920 1080)
 PATH_ARGUMENTS = ('--output', '--slap-comp')
 CMD_SPECIAL_CHARACTERS = ' \t&|<>^()'
+EXTRA_ARGUMENTS = 'ExtraArguments'
+
+
+def split_arguments(text):
+	'''
+	Split free form husk arguments like a shell does, with quotes grouping values
+	containing spaces. Backslashes are kept for Windows paths.
+	'''
+	lexer = shlex.shlex(text, posix=True)
+	lexer.whitespace_split = True
+	lexer.escape = ''
+	lexer.commenters = ''  # keep # in values such as shot#1.log
+	return list(lexer)
 
 
 def cmd_quote(argument):
 	'''
 	Quote an argument for a cmd batch file, as rez runs commands in one.
+	cmd can't escape double quotes inside a quoted argument, and a line break
+	starts a new command, so arguments containing either are rejected.
 	'''
+	if any(character in argument for character in '"\r\n'):
+		raise ValueError('{!r} contains a double quote or line break, which cmd can\'t pass to husk'.format(argument))
 	argument = argument.replace('%', '%%')
 	if argument and not any(character in argument for character in CMD_SPECIAL_CHARACTERS):
 		return argument
@@ -118,7 +135,8 @@ class HuskStandalone(DeadlinePlugin):
 			'--usd-input', usd_file_path, '--frame', str(frame),
 			'--frame-count', str(frame_count), '--make-output-path']
 		for arg_name in self.GetPluginInfoEntry('ArgumentList').split(';'):
-			if arg_name == '--usd-input':
+			# Extra arguments are added last, also when added after submission and missing from ArgumentList
+			if arg_name in ('--usd-input', EXTRA_ARGUMENTS):
 				continue
 
 			if arg_name.startswith('override'):
@@ -145,6 +163,11 @@ class HuskStandalone(DeadlinePlugin):
 					value += 'a'  # Required for progress handling
 				arguments += [arg_name, *([value] if arg_name in PATH_ARGUMENTS else value.split())]
 
+		try:
+			arguments += split_arguments(self.GetPluginInfoEntryWithDefault(EXTRA_ARGUMENTS, ''))
+		except ValueError as error:
+			self.FailRender('Invalid {}: {}'.format(EXTRA_ARGUMENTS, error))
+
 		self.LogInfo(f"Rendering USD file: {usd_file_path}")
 
 		# Do GPU Affinity Environment vars
@@ -155,7 +178,10 @@ class HuskStandalone(DeadlinePlugin):
 		rez_context, rez_request = self.RezSettings()
 		if rez_context or rez_request:
 			self.LogInfo('Rendering in rez: {}'.format(rez_context or rez_request))
-			return rez_arguments(arguments, rez_context, rez_request)
+			try:
+				return rez_arguments(arguments, rez_context, rez_request)
+			except ValueError as error:
+				self.FailRender('Cannot render in rez: {}'.format(error))
 		return subprocess.list2cmdline(arguments)
 
 

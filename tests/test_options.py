@@ -21,3 +21,11 @@ def test_default_arguments() -> None:
 	assert arguments['--disable-motionblur'] == 'False'
 	assert 'override_--renderer' not in arguments
 	assert len({option.flag for option in OPTIONS}) == len(OPTIONS)
+
+
+def test_options_file_lists_settings_editable_after_submission() -> None:
+	text = options_file_text()
+
+	for key in ('[ExtraArguments]', '[Version]', '[RezRequest]', '[RezContext]'):
+		assert key in text
+	assert default_arguments()['ExtraArguments'] == ''
